@@ -1,0 +1,10 @@
+LICENSE
+README.md
+setup.py
+tablemaster/__init__.py
+tablemaster/utils.py
+tablemaster.egg-info/PKG-INFO
+tablemaster.egg-info/SOURCES.txt
+tablemaster.egg-info/dependency_links.txt
+tablemaster.egg-info/requires.txt
+tablemaster.egg-info/top_level.txt

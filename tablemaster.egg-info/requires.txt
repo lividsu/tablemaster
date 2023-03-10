@@ -1,0 +1,8 @@
+mysql-connector
+PyMySQL
+SQLAlchemy
+pandas
+python-dateutil
+pygsheets
+tqdm
+numpy
