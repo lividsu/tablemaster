@@ -1,2 +1,2 @@
 # tablemaster
-python package help manage tables everywhere very easily
+A Python package makes it easy to manage tables anywhere.
