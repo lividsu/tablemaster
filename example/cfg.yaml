@@ -1,0 +1,6 @@
+ db_name_example:
+   name: db_name_example
+   user: user_name_example
+   password: pw_example
+   host: host_example
+   database: db_example
