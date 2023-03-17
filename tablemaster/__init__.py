@@ -1,5 +1,10 @@
 import mysql.connector
 from mysql.connector import Error
+from yaml import load, dump
+try:
+    from yaml import CLoader as Loader, CDumper as Dumper
+except ImportError:
+    from yaml import Loader, Dumper
 import json
 from types import SimpleNamespace
 import pandas as pd
@@ -14,9 +19,8 @@ pymysql.install_as_MySQLdb()
 
 from . import utils
 
-with open('mysql_config.json') as mysql_config:
-    ms = json.dumps(json.load(mysql_config))
-    ms = json.loads(ms, object_hook=lambda d: SimpleNamespace(**d))
+with open('cfg.yaml') as cfg:
+    cfg = json.loads(json.dumps(load(cfg, Loader=Loader)), object_hook=lambda d: SimpleNamespace(**d))
 
 
 #query function
