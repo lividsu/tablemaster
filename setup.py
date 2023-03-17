@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='tablemaster',
-    version='0.21',
+    version='1.0',
     packages=find_packages(),
     install_requires=[
         'mysql-connector',
