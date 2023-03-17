@@ -7,7 +7,7 @@ setup(
     install_requires=[
         'mysql-connector',
         'PyMySQL',
-        'SQLAlchemy',
+        'SQLAlchemy==1.4.46',
         'pandas',
         'python-dateutil',
         'pygsheets',
