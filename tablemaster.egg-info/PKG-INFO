@@ -1,10 +1,8 @@
-Metadata-Version: 1.0
+Metadata-Version: 2.1
 Name: tablemaster
-Version: 1.0.1
+Version: 1.0.2
 Summary: A Python package makes it easy to manage tables anywhere
 Home-page: https://github.com/ilivid/tablemaster
 Author: Livid
 Author-email: livid.su@gmail.com
-License: UNKNOWN
-Description: UNKNOWN
-Platform: UNKNOWN
+License-File: LICENSE
