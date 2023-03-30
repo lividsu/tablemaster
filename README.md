@@ -17,19 +17,8 @@ pip install tablemaster
    database: db_example
 ```
 
-### To use the function related to google sheet, need to put a file named client_secret.json in the same path, here is the guide:
-1. Go to the Google Developers Console at https://console.developers.google.com/
-2. Create a new project by clicking on the drop-down menu at the top of the page and selecting "New Project".
-3. Enter a name for your project and click on the "Create" button.
-4. Select your project from the drop-down menu at the top of the page and click on the "Dashboard" button.
-5. Click on the "Enable APIs and Services" button.
-6. Search for "Google Sheets API" & "Google Drive API" and click on the "Enable" button.
-7. Click on the "Create Credentials" button.
-8. Select "OAuth client ID" as the type of credentials to create.
-9. Choose "Desktop App" as the application type and enter a name for your OAuth client ID.
-10. Click on the "Create" button.
-11. Click on the "Download" button next to your new OAuth client ID.
-12. Rename the downloaded file to "client_secret.json" and save it to the directory where your script is located.
+### To use the function related to google sheet, here is the guide:
+https://docs.gspread.org/en/latest/oauth2.html
 
 # Examples
 
