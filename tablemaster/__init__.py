@@ -10,7 +10,7 @@ from types import SimpleNamespace
 import pandas as pd
 from datetime import datetime
 import math
-import pygsheets
+import gspread
 from tqdm import tqdm
 from sqlalchemy import create_engine
 from sqlalchemy.types import DateTime
@@ -110,19 +110,18 @@ class Manage_table:
         except:
             print('del error!')
 
-def gs_read_data(map):
+def gs_read_df(map):
     print('...reading google sheets...')
-    gc = pygsheets.authorize()
-    sh = gc.open(map[0])
-    wk = sh.worksheet_by_title(map[1])
-    df = pd.DataFrame(wk.get_all_records())
+    gc = gspread.service_account()
+    wks = gc.open(map[0]).worksheet(map[1])
+    df = pd.DataFrame(wks.get_all_records())
     print('...have read google sheets!...')
     print(df.head())
     return df
 
-def gs_write_data(map, df, loc=(1,1)):
-    gc = pygsheets.authorize()
-    sh = gc.open(map[0])
-    wk = sh.worksheet_by_title(map[1])
-    wk.clear()
-    wk.set_dataframe(df, loc)
+def gs_write_df(map, df, loc='A1'):
+    print('...writing google sheets...')
+    gc = gspread.service_account()
+    wks = gc.open(map[0]).worksheet(map[1])
+    wks.update(loc,([df.columns.values.tolist()] + df.values.tolist()))
+    print('data is written!')

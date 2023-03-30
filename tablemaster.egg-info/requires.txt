@@ -2,7 +2,7 @@ PyMySQL
 SQLAlchemy==1.4.46
 pandas
 python-dateutil
-pygsheets
+gspread
 tqdm
 numpy
 mysql-connector-python
