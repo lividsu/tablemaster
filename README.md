@@ -66,12 +66,12 @@ tb.delete_table()
 ## read table from google sheet
 ```
 google_sheet = ('GoogleSheet Table Name', 'GoogleSheet Sheet Name')
-df = tm.gs_read_data(google_sheet)
+df = tm.gs_read_df(google_sheet)
 df
 ```
 
 ## write data df to google sheet
 ```
 google_sheet = ('GoogleSheet Table Name', 'GoogleSheet Sheet Name')
-tm.gs_write_data(google_sheet, df)
+tm.gs_write_df(google_sheet, df)
 ```
