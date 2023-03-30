@@ -23,7 +23,7 @@ pip install tablemaster
 3. Enter a name for your project and click on the "Create" button.
 4. Select your project from the drop-down menu at the top of the page and click on the "Dashboard" button.
 5. Click on the "Enable APIs and Services" button.
-6. Search for "Google Sheets API" and click on the "Enable" button.
+6. Search for "Google Sheets API" & "Google Drive API" and click on the "Enable" button.
 7. Click on the "Create Credentials" button.
 8. Select "OAuth client ID" as the type of credentials to create.
 9. Choose "Desktop App" as the application type and enter a name for your OAuth client ID.
