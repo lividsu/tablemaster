@@ -2,6 +2,8 @@ LICENSE
 README.md
 setup.py
 tablemaster/__init__.py
+tablemaster/gspread.py
+tablemaster/mysql.py
 tablemaster/utils.py
 tablemaster.egg-info/PKG-INFO
 tablemaster.egg-info/SOURCES.txt
