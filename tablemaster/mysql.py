@@ -9,6 +9,7 @@ import pandas as pd
 from tqdm import tqdm
 from datetime import datetime
 import math
+import urllib.parse
 
 #query function
 def query(sql, configs):
@@ -74,8 +75,8 @@ class Manage_table:
             run_date = datetime.strftime(run_time, '%Y-%m-%d')
             data['rundate'] = run_date
         data=data.convert_dtypes()
-        
-        engine = f'mysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}'
+        encoded_pw = urllib.parse.quote(self.password)
+        engine = f'mysql://{self.user}:{encoded_pw}@{self.host}:{self.port}/{self.database}'
         my_conn = create_engine(engine)
 
         batch_size = 10000
