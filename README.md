@@ -52,6 +52,12 @@ tb = tm.Manage_table('table_name_2', tm.cfg.db1)
 tb.delete_table()
 ```
 
+## delete rows in mysql with condition
+```
+tb = tm.Manage_table('table_name_2', tm.cfg.db1)
+tb.par_del("order_date > '2023-01-01' ")
+```
+
 ## read table from google sheet
 ```
 google_sheet = ('GoogleSheet Table Name', 'GoogleSheet Sheet Name')
