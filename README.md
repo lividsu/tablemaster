@@ -27,14 +27,14 @@ https://docs.gspread.org/en/latest/oauth2.html
 import tablemaster as tm
 ```
 
-## Query from mysql
+## query from mysql
 ```
 sql_query = 'SELECT * FROM table_name LIMIT 20'
 df = tm.query(sql_query, tm.cfg.db_name)
 df
 ```
 
-## Change column name
+## change column name
 ```
 sql_query = ('ALTER TABLE table_name RENAME COLUMN column1 TO column2')
 tm.opt(sql_query, tm.cfg.db_name)
