@@ -6,3 +6,5 @@ gspread
 tqdm
 numpy
 mysql-connector-python
+pyyaml
+openpyxl

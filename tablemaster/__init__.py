@@ -23,3 +23,8 @@ from .gspread import (
     gs_write_df,
 )
 
+from .local import (
+    read,
+    batch_read,
+)
+

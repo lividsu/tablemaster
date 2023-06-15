@@ -3,7 +3,7 @@ A Python package makes it easy to manage tables anywhere.
 
 # Install
 ```
-pip install tablemaster
+pip install -U tablemaster
 ```
 
 # Preparation

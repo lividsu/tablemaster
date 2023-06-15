@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='tablemaster',
-    version='1.0.7',
+    version='1.1.0',
     packages=find_packages(),
     install_requires=[
         'PyMySQL',
@@ -13,6 +13,8 @@ setup(
         'tqdm',
         'numpy',
         'mysql-connector-python',
+        'pyyaml',
+        'openpyxl',
     ],
     author='Livid',
     author_email='livid.su@gmail.com',

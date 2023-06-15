@@ -20,9 +20,10 @@ def query(sql, configs):
     print(f'try to connect to {configs.name}...')
     conn = mysql.connector.connect(user=configs.user, password=configs.password, \
                                    host=configs.host, database=configs.database, port=cf_port)
-    cursor = conn.cursor()
     print('reading...')
     df = pd.read_sql(sql, conn)
+    conn.commit()
+    conn.close()
     return df
 
 
@@ -36,6 +37,9 @@ def opt(sql, configs):
                                    host=configs.host, database=configs.database, port=cf_port)
     cursor = conn.cursor()
     cursor.execute(sql)
+    conn.commit()
+    cursor.close()
+    conn.close()
 
 
 class Manage_table:
@@ -97,3 +101,6 @@ class Manage_table:
             print(f'records of table that {clause} are deleted!')
         except:
             print('del error!')
+        conn.commit()
+        cursor.close()
+        conn.close()
