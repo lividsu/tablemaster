@@ -26,5 +26,6 @@ from .gspread import (
 from .local import (
     read,
     batch_read,
+    read_dfs,
 )
 
