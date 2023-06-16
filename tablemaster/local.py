@@ -22,6 +22,17 @@ def detect_header_read_excel(path, det_rows=10):
                 break
     return df
 
+def equal_table(df1, df2, det_col='nan'):
+    if(len(df1) != len(df2)):
+        return False
+    elif df1.equals(df2):
+        return True
+    else:
+        if det_col == 'nan':
+            return all(df1.iloc[:,0].fillna("").sort_values().reset_index(drop=True) == df2.iloc[:,0].fillna("").sort_values().reset_index(drop=True))
+        else:
+            return all(df1[det_col].fillna("").sort_values().reset_index(drop=True).fillna(0) == df2[det_col].fillna("").sort_values().reset_index(drop=True))
+
 def read(file, det_header=True):
     if isinstance(file, pathlib.PosixPath):
         file = str(file)
@@ -49,10 +60,10 @@ def read(file, det_header=True):
             except Exception as e:
                 print(e)
         else:
-            print('unsupported file type!')
+            raise Exception(f'unsupported file type: {file_path.suffix}')
         return df
 
-def batch_read(file):
+def batch_read(file, det_col='nan'):
     path_list = list(Path().glob(file))
     print(f'below {len(path_list)} file found: {path_list}')
     dataframes = []
@@ -62,7 +73,22 @@ def batch_read(file):
 
     unique_dataframes = []
     for df in dataframes:
-        if not any(df.equals(existing_df) for existing_df in unique_dataframes):
+        if not any(equal_table(df, existing_df, det_col) for existing_df in unique_dataframes):
             unique_dataframes.append(df)
     print(f'{len(unique_dataframes)}  unique files found!')
     return pd.concat(unique_dataframes).reset_index(drop=True)
+
+
+def read_dfs(file, det_col='nan'):
+    path_list = list(Path().glob(file))
+    print(f'below {len(path_list)} file found: {path_list}')
+    dataframes = []
+    for i, file in enumerate(path_list):
+        df = read(file)
+        dataframes.append(df)
+    unique_dataframes = []
+    for df in dataframes:
+        if not any(equal_table(df, existing_df, det_col) for existing_df in unique_dataframes):
+            unique_dataframes.append(df)
+    print(f'{len(unique_dataframes)}  unique files found!')
+    return unique_dataframes
