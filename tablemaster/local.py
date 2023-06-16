@@ -37,7 +37,7 @@ def read(file, det_header=True):
     if isinstance(file, pathlib.PosixPath):
         file = str(file)
     file_detect = list(Path().glob(file))
-    file_detect = [i for i in file_detect if str(i)[0]!="."]
+    file_detect = [i for i in file_detect if (str(i)[0]!="." or str(i)[:3]=="../")]
     if len(file_detect)>1:
         print(f'There are more 1 file detected, please specify the file name! \n {file_detect}')
         return "error"
