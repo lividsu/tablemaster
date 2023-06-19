@@ -4,3 +4,4 @@
    password: pw_example
    host: host_example
    database: db_example
+   port: port_example
