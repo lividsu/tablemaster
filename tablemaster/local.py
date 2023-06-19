@@ -29,7 +29,7 @@ def equal_table(df1, df2, det_col='nan'):
         return True
     else:
         if det_col == 'nan':
-            return all(df1.iloc[:,0].fillna("").sort_values().reset_index(drop=True) == df2.iloc[:,0].fillna("").sort_values().reset_index(drop=True))
+            return False
         else:
             return all(df1[det_col].fillna("").sort_values().reset_index(drop=True).fillna(0) == df2[det_col].fillna("").sort_values().reset_index(drop=True))
 
