@@ -34,6 +34,24 @@ df = tm.query(sql_query, tm.cfg.db_name)
 df
 ```
 
+## import one file from local
+```
+df = tm.read("*Part of File Name*")
+df
+```
+
+## batch import and merge
+```
+df = tm.batch_read("*Part of File Name*")
+df
+```
+
+## batch import without merging
+```
+df = tm.read_dfs("*Part of File Name*")
+df
+```
+
 ## change column name
 ```
 sql_query = ('ALTER TABLE table_name RENAME COLUMN column1 TO column2')
