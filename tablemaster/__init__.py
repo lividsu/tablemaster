@@ -33,5 +33,6 @@ from .local import (
 
 from .feishu import (
     fs_read_df,
+    fs_read_base,
 )
 

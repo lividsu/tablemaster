@@ -88,3 +88,17 @@ df
 google_sheet = ('GoogleSheet Table Name', 'GoogleSheet Sheet Name')
 tm.gs_write_df(google_sheet, df)
 ```
+
+## read table from feishu(lark)
+```
+feishu_sheet = ('Feishu Sheet ID Name', 'Feishu Sheet Table Name')
+df = tm.fs_read_df(feishu_sheet)
+df
+```
+
+## read base from feishu(lark)
+```
+feishu_base = ('Feishu Base ID Name', 'Feishu Base Table Name')
+df = tm.fs_read_base(feishu_base)
+df
+```
