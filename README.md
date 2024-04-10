@@ -20,20 +20,85 @@ pip install -U tablemaster
 ### To use the function related to google sheet, here is the guide:
 https://docs.gspread.org/en/latest/oauth2.html
 
-# Examples
-
-## import
-```
-import tablemaster as tm
-```
+# Examples of Mysql Part
 
 ## query from mysql
 ```
+import tablemaster as tm
+
 sql_query = 'SELECT * FROM table_name LIMIT 20'
 df = tm.query(sql_query, tm.cfg.db_name)
 df
 ```
 
+## change column name
+```
+import tablemaster as tm
+
+sql_query = ('ALTER TABLE table_name RENAME COLUMN column1 TO column2')
+tm.opt(sql_query, tm.cfg.db_name)
+```
+
+## create a table in mysql and upload data from dataframe df
+```
+import tablemaster as tm
+
+tb = tm.ManageTable('table_name_2', tm.cfg.db1)
+tb.upload_data(df, add_date=True)
+```
+
+## delete a table in mysql
+```
+import tablemaster as tm
+
+tb = tm.ManageTable('table_name_2', tm.cfg.db1)
+tb.delete_table()
+```
+
+## delete rows in mysql with condition
+```
+import tablemaster as tm
+
+tb = tm.ManageTable('table_name_2', tm.cfg.db1)
+tb.par_del("order_date > '2023-01-01' ")
+```
+
+## change data type of the mysql table
+```
+import tablemaster as tm
+
+tb = tm.ManageTable('table_name_2', tm.cfg.db1)
+tb.change_data_type('col_a', 'VARCHAR(10)')
+```
+
+# Examples of Google Sheet Part
+## read table from google sheet
+```
+google_sheet = ('GoogleSheet Table Name', 'GoogleSheet Sheet Name')
+df = tm.gs_read_df(google_sheet)
+df
+```
+
+## write data df to google sheet
+```
+google_sheet = ('GoogleSheet Table Name', 'GoogleSheet Sheet Name')
+tm.gs_write_df(google_sheet, df)
+```
+# Examples of Feishu/Lark Part
+## read table from feishu(lark)
+```
+feishu_sheet = ('Feishu Sheet ID Name', 'Feishu Sheet Table Name')
+df = tm.fs_read_df(feishu_sheet)
+df
+```
+
+## read base from feishu(lark)
+```
+feishu_base = ('Feishu Base ID Name', 'Feishu Base Table Name')
+df = tm.fs_read_base(feishu_base)
+df
+```
+# Examples of Local Part
 ## import one file from local
 ```
 df = tm.read("*Part of File Name*")
@@ -49,62 +114,5 @@ df
 ## batch import without merging
 ```
 df = tm.read_dfs("*Part of File Name*")
-df
-```
-
-## change column name
-```
-sql_query = ('ALTER TABLE table_name RENAME COLUMN column1 TO column2')
-tm.opt(sql_query, tm.cfg.db_name)
-```
-
-## create a table in mysql and upload data from dataframe df
-```
-tb = tm.ManageTable('table_name_2', tm.cfg.db1)
-tb.upload_data(df, add_date=True)
-```
-
-## delete a table in mysql
-```
-tb = tm.ManageTable('table_name_2', tm.cfg.db1)
-tb.delete_table()
-```
-
-## delete rows in mysql with condition
-```
-tb = tm.ManageTable('table_name_2', tm.cfg.db1)
-tb.par_del("order_date > '2023-01-01' ")
-```
-
-## change data type of the mysql table
-```
-tb = tm.ManageTable('table_name_2', tm.cfg.db1)
-tb.change_data_type('col_a', 'VARCHAR(10)')
-```
-
-## read table from google sheet
-```
-google_sheet = ('GoogleSheet Table Name', 'GoogleSheet Sheet Name')
-df = tm.gs_read_df(google_sheet)
-df
-```
-
-## write data df to google sheet
-```
-google_sheet = ('GoogleSheet Table Name', 'GoogleSheet Sheet Name')
-tm.gs_write_df(google_sheet, df)
-```
-
-## read table from feishu(lark)
-```
-feishu_sheet = ('Feishu Sheet ID Name', 'Feishu Sheet Table Name')
-df = tm.fs_read_df(feishu_sheet)
-df
-```
-
-## read base from feishu(lark)
-```
-feishu_base = ('Feishu Base ID Name', 'Feishu Base Table Name')
-df = tm.fs_read_base(feishu_base)
 df
 ```
