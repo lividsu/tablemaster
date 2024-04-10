@@ -2,17 +2,16 @@ from setuptools import setup, find_packages
 
 setup(
     name='tablemaster',
-    version='1.1.4',
+    version='1.2.0',
     packages=find_packages(),
     install_requires=[
         'PyMySQL',
-        'SQLAlchemy==1.4.46',
+        'SQLAlchemy',
         'pandas',
         'python-dateutil',
         'gspread',
         'tqdm',
         'numpy',
-        'mysql-connector-python',
         'pyyaml',
         'openpyxl',
     ],

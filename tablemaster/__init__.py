@@ -17,6 +17,7 @@ from . import utils
 from .mysql import (
     query,
     opt,
+    ManageTable,
     Manage_table,
 )
 
