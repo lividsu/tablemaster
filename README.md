@@ -74,6 +74,8 @@ tb.change_data_type('col_a', 'VARCHAR(10)')
 # Examples of Google Sheet Part
 ## read table from google sheet
 ```
+import tablemaster as tm
+
 google_sheet = ('GoogleSheet Table Name', 'GoogleSheet Sheet Name')
 df = tm.gs_read_df(google_sheet)
 df
@@ -81,12 +83,16 @@ df
 
 ## write data df to google sheet
 ```
+import tablemaster as tm
+
 google_sheet = ('GoogleSheet Table Name', 'GoogleSheet Sheet Name')
 tm.gs_write_df(google_sheet, df)
 ```
 # Examples of Feishu/Lark Part
 ## read table from feishu(lark)
 ```
+import tablemaster as tm
+
 feishu_sheet = ('Feishu Sheet ID Name', 'Feishu Sheet Table Name')
 df = tm.fs_read_df(feishu_sheet)
 df
@@ -94,6 +100,8 @@ df
 
 ## read base from feishu(lark)
 ```
+import tablemaster as tm
+
 feishu_base = ('Feishu Base ID Name', 'Feishu Base Table Name')
 df = tm.fs_read_base(feishu_base)
 df
@@ -101,18 +109,24 @@ df
 # Examples of Local Part
 ## import one file from local
 ```
+import tablemaster as tm
+
 df = tm.read("*Part of File Name*")
 df
 ```
 
 ## batch import and merge
 ```
+import tablemaster as tm
+
 df = tm.batch_read("*Part of File Name*")
 df
 ```
 
 ## batch import without merging
 ```
+import tablemaster as tm
+
 df = tm.read_dfs("*Part of File Name*")
 df
 ```
