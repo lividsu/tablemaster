@@ -60,20 +60,26 @@ tm.opt(sql_query, tm.cfg.db_name)
 
 ## create a table in mysql and upload data from dataframe df
 ```
-tb = tm.Manage_table('table_name_2', tm.cfg.db1)
-tb.upload_data(df)
+tb = tm.ManageTable('table_name_2', tm.cfg.db1)
+tb.upload_data(df, add_date=True)
 ```
 
 ## delete a table in mysql
 ```
-tb = tm.Manage_table('table_name_2', tm.cfg.db1)
+tb = tm.ManageTable('table_name_2', tm.cfg.db1)
 tb.delete_table()
 ```
 
 ## delete rows in mysql with condition
 ```
-tb = tm.Manage_table('table_name_2', tm.cfg.db1)
+tb = tm.ManageTable('table_name_2', tm.cfg.db1)
 tb.par_del("order_date > '2023-01-01' ")
+```
+
+## change data type of the mysql table
+```
+tb = tm.ManageTable('table_name_2', tm.cfg.db1)
+tb.change_data_type('col_a', 'VARCHAR(10)')
 ```
 
 ## read table from google sheet
