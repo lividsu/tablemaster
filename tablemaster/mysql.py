@@ -53,7 +53,7 @@ class ManageTable:
         opt(f'DROP TABLE {self.table}', self)
         print(f'{self.table} deleted!')
 
-    def pal_del(self, clause):
+    def par_del(self, clause):
         del_clause = f"DELETE FROM {self.table} WHERE {clause}"
         opt(del_clause, self)
         print(f'records of table that {clause} are deleted!')
@@ -109,7 +109,7 @@ class Manage_table:
         opt(f'DROP TABLE {self.table}', self)
         print(f'{self.table} deleted!')
 
-    def pal_del(self, clause):
+    def par_del(self, clause):
         del_clause = f"DELETE FROM {self.table} WHERE {clause}"
         opt(del_clause, self)
         print(f'records of table that {clause} are deleted!')
