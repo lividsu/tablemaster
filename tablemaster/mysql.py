@@ -24,7 +24,8 @@ def opt(sql, configs):
     except:
         cf_port = 3306
     print(f'try to connect to {configs.name}...')
-    engine = create_engine(f'mysql+pymysql://{configs.user}:{configs.password}@{configs.host}:{cf_port}/{configs.database}')
+    engine = create_engine(f'mysql+pymysql://{configs.user}:{configs.password}@{configs.host}:{cf_port}/{configs.database}',
+                           isolation_level="AUTOCOMMIT")
     # Connect to the database using the engine's connect method
     with engine.connect() as conn:
         # Execute the SQL statement directly, without using pandas
