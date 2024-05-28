@@ -13,9 +13,12 @@ def gs_read_df(map,service_account_path=None):
     print(df.head())
     return df
 
-def gs_write_df(map, df, loc='A1'):
+def gs_write_df(map, df, loc='A1',service_account_path=None):
     print('...writing google sheets...')
-    gc = gspread.service_account()
+    if service_account_path:
+        gc = gspread.service_account(service_account_path)
+    else:
+        gc = gspread.service_account()
     try:
         wks = gc.open(map[0]).worksheet(map[1])
     except Exception as e:
