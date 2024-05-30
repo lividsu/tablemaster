@@ -8,9 +8,12 @@ import json
 from types import SimpleNamespace
 import pandas as pd
 
-
-with open('cfg.yaml') as cfg:
-    cfg = json.loads(json.dumps(load(cfg, Loader=Loader)), object_hook=lambda d: SimpleNamespace(**d))
+try:
+    with open('cfg.yaml') as cfg:
+        cfg = json.loads(json.dumps(load(cfg, Loader=Loader)), object_hook=lambda d: SimpleNamespace(**d))
+except Exception as e:
+    print(e)
+    
 
 from . import utils
 
