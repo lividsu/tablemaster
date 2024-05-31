@@ -51,8 +51,11 @@ class ManageTable:
             print("table not found!")
 
     def delete_table(self):
-        opt(f'DROP TABLE {self.table}', self)
-        print(f'{self.table} deleted!')
+        try:
+            opt(f'DROP TABLE {self.table}', self)
+            print(f'{self.table} deleted!')
+        except:
+            print('Table was not deleted!')
 
     def par_del(self, clause):
         del_clause = f"DELETE FROM {self.table} WHERE {clause}"
