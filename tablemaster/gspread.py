@@ -20,16 +20,24 @@ def gs_write_df(map, df, loc='A1',service_account_path=None):
     else:
         gc = gspread.service_account()
     try:
-        wks = gc.open(map[0]).worksheet(map[1])
+        # Try to open the spreadsheet
+        sh = gc.open(map[0])
+    except gspread.exceptions.SpreadsheetNotFound:
+        print(f'Spreadsheet {map[0]} not found, will create one!')
+        sh = gc.create(map[0])
+    try:
+        # Try to open the worksheet
+        wks = sh.worksheet(map[1])
+    except gspread.exceptions.WorksheetNotFound:
+        print(f'Worksheet {map[1]} not found, will create one!')
+        wks = sh.add_worksheet(title=map[1], rows="100", cols="20")
+    try:
+        # Clear the worksheet and update with new data
+        wks.clear()
+        non_float_int_columns = df.select_dtypes(exclude=['float64', 'int64']).columns
+        for col in non_float_int_columns:
+            df[col] = df[col].astype(str)
+        wks.update(loc, ([df.columns.values.tolist()] + df.values.tolist()))
+        print('Data is written!')
     except Exception as e:
-        if e.__class__.__name__ == 'WorksheetNotFound':
-            print(f'{map[1]} not found, will create one!')
-            wks = gc.open(map[0]).add_worksheet(title=map[1], rows="100", cols="20")
-        else:
-            print(e)
-    wks.clear()
-    non_float_int_columns = df.select_dtypes(exclude=['float64', 'int64']).columns
-    for col in non_float_int_columns:
-        df[col] = df[col].astype(str)
-    wks.update(loc,([df.columns.values.tolist()] + df.values.tolist()))
-    print('data is written!')
+        print(f"Failed to update worksheet: {e}")
