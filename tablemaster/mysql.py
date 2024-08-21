@@ -3,6 +3,7 @@ from sqlalchemy import create_engine, text
 import pandas as pd
 from datetime import datetime
 from tqdm import tqdm
+from urllib.parse import quote_plus
 
 
 #query function
@@ -12,7 +13,9 @@ def query(sql, configs):
     except:
         cf_port = 3306
     print(f'try to connect to {configs.name}...')
-    engine = create_engine(f'mysql+pymysql://{configs.user}:{configs.password}@{configs.host}:{cf_port}/{configs.database}')
+    # URL-encode the password to handle special characters
+    password_encoded = quote_plus(configs.password)
+    engine = create_engine(f'mysql+pymysql://{configs.user}:{password_encoded}@{configs.host}:{cf_port}/{configs.database}')
     df = pd.read_sql(sql, engine)
     print(df.head())
     return df
@@ -24,7 +27,9 @@ def opt(sql, configs):
     except:
         cf_port = 3306
     print(f'try to connect to {configs.name}...')
-    engine = create_engine(f'mysql+pymysql://{configs.user}:{configs.password}@{configs.host}:{cf_port}/{configs.database}',
+    # URL-encode the password to handle special characters
+    password_encoded = quote_plus(configs.password)
+    engine = create_engine(f'mysql+pymysql://{configs.user}:{password_encoded}@{configs.host}:{cf_port}/{configs.database}',
                            isolation_level="AUTOCOMMIT")
     # Connect to the database using the engine's connect method
     with engine.connect() as conn:
@@ -41,7 +46,7 @@ class ManageTable:
         self.table = table
         self.name = configs.name
         self.user = configs.user
-        self.password = configs.password
+        self.password = quote_plus(configs.password)
         self.host = configs.host
         self.database = configs.database
         try:
