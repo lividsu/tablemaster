@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name='tablemaster',
-    version='1.2.5',
+    version='1.2.8',
     packages=find_packages(),
     install_requires=[
         'PyMySQL',
