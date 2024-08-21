@@ -94,6 +94,43 @@ class ManageTable:
                 except Exception as e:
                     print(f"An error occurred: {e}")
 
+    def upsert_data(self, df, chunk_size=10000, add_date=False):
+        db_url = f'mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}'
+        engine = create_engine(db_url)
+
+        with engine.begin() as connection:
+            # Add a 'rundate' column with the current date formatted as 'YYYY-MM-DD' if required
+            if add_date:
+                df_copy = df.copy()
+                df_copy['rundate'] = datetime.now().strftime('%Y-%m-%d')
+            else:
+                df_copy = df
+
+            total_chunks = (len(df_copy) // chunk_size) + (0 if len(df_copy) % chunk_size == 0 else 1)
+            print(f'Trying to upload data now, chunk_size is {chunk_size}')
+
+            with tqdm(total=total_chunks, desc="Uploading Chunks", unit="chunk") as pbar:
+                for start in range(0, len(df_copy), chunk_size):
+                    end = min(start + chunk_size, len(df_copy))
+                    chunk = df_copy.iloc[start:end]
+                    columns = chunk.columns.tolist()
+                    update_columns = ', '.join([f"{col}=VALUES({col})" for col in columns])
+
+                    try:
+                        # Use INSERT ... ON DUPLICATE KEY UPDATE
+                        insert_sql = f"""
+                        INSERT INTO {self.table} ({', '.join(columns)})
+                        VALUES ({', '.join(['%s'] * len(columns))})
+                        ON DUPLICATE KEY UPDATE {update_columns}
+                        """
+                        data = [tuple(row) for row in chunk.to_numpy()]
+                        with connection.connection.cursor() as cursor:
+                            cursor.executemany(insert_sql, data)
+                        connection.connection.commit()
+                        pbar.update(1)
+                    except Exception as e:
+                        print(f"An error occurred: {e}")
+
 # Old ManageTable Way
 class Manage_table:
     def __init__(self, table, configs):
