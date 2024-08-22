@@ -94,7 +94,7 @@ class ManageTable:
                 except Exception as e:
                     print(f"An error occurred: {e}")
 
-    def upsert_data(self, df, chunk_size=10000, add_date=False):
+    def upsert_data(self, df, chunk_size=10000, add_date=False, ignore=False):
         db_url = f'mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}'
         engine = create_engine(db_url)
 
@@ -117,12 +117,20 @@ class ManageTable:
                     update_columns = ', '.join([f"{col}=VALUES({col})" for col in columns])
 
                     try:
-                        # Use INSERT ... ON DUPLICATE KEY UPDATE
-                        insert_sql = f"""
-                        INSERT INTO {self.table} ({', '.join(columns)})
-                        VALUES ({', '.join(['%s'] * len(columns))})
-                        ON DUPLICATE KEY UPDATE {update_columns}
-                        """
+                        if ignore == False:
+                            # Use INSERT ... ON DUPLICATE KEY UPDATE
+                            insert_sql = f"""
+                            INSERT INTO {self.table} ({', '.join(columns)})
+                            VALUES ({', '.join(['%s'] * len(columns))})
+                            ON DUPLICATE  KEY UPDATE {update_columns}
+                            """
+                        else:
+                            # Ignore the duplicate key rows
+                            insert_sql = f"""
+                            INSERT IGNORE INTO {self.table} ({', '.join(columns)})
+                            VALUES ({', '.join(['%s'] * len(columns))})
+                            """
+
                         data = [tuple(row) for row in chunk.to_numpy()]
                         with connection.connection.cursor() as cursor:
                             cursor.executemany(insert_sql, data)
