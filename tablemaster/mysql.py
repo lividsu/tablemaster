@@ -114,20 +114,20 @@ class ManageTable:
                     end = min(start + chunk_size, len(df_copy))
                     chunk = df_copy.iloc[start:end]
                     columns = chunk.columns.tolist()
-                    update_columns = ', '.join([f"{col}=VALUES({col})" for col in columns])
+                    update_columns = ', '.join([f"`{col}`=VALUES(`{col}`)" for col in columns])
 
                     try:
                         if ignore == False:
-                            # Use INSERT ... ON DUPLICATE KEY UPDATE
+                            # Use INSERT ... ON DUPLICATE KEY UPDATE (Use the new value to replace old value)
                             insert_sql = f"""
-                            INSERT INTO {self.table} ({', '.join(columns)})
+                            INSERT INTO {self.table} ({', '.join([f'`{col}`' for col in columns])})
                             VALUES ({', '.join(['%s'] * len(columns))})
-                            ON DUPLICATE  KEY UPDATE {update_columns}
+                            ON DUPLICATE KEY UPDATE {update_columns}
                             """
                         else:
-                            # Ignore the duplicate key rows
+                            # Ignore the duplicate key rows (Keep the old value)
                             insert_sql = f"""
-                            INSERT IGNORE INTO {self.table} ({', '.join(columns)})
+                            INSERT IGNORE INTO {self.table} ({', '.join([f'`{col}`' for col in columns])})
                             VALUES ({', '.join(['%s'] * len(columns))})
                             """
 
