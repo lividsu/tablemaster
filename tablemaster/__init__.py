@@ -1,4 +1,3 @@
-
 from yaml import load, dump
 try:
     from yaml import CLoader as Loader, CDumper as Dumper
@@ -8,12 +7,31 @@ import json
 from types import SimpleNamespace
 import pandas as pd
 
+# ============ 配置读取工具 ============
+
+def read_cfg(file_path: str) -> SimpleNamespace:
+    """
+    从指定路径读取 yaml 配置文件，返回 SimpleNamespace 对象
+    支持通过属性访问配置项，如: cfg.database.host
+    """
+    with open(file_path, 'r', encoding='utf-8') as f:
+        yaml_content = load(f, Loader=Loader)
+        json_content = json.dumps(yaml_content)
+        return json.loads(json_content, object_hook=lambda d: SimpleNamespace(**d))
+
+
+# ============ 自动加载本地 cfg.yaml ============
+
+cfg = None
 try:
-    with open('cfg.yaml') as cfg:
-        cfg = json.loads(json.dumps(load(cfg, Loader=Loader)), object_hook=lambda d: SimpleNamespace(**d))
-except Exception as e:
-    print(e)
-    
+    cfg = read_cfg('cfg.yaml')
+    print('[✓] cfg.yaml loaded')
+except FileNotFoundError:
+    pass  # 静默处理，不存在就不加载
+except Exception:
+    pass  # 其他错误也静默
+
+# ============ 模块导入 ============
 
 from . import utils
 
@@ -38,5 +56,6 @@ from .local import (
 from .feishu import (
     fs_read_df,
     fs_read_base,
+    fs_write_df,
+    fs_write_base,
 )
-
