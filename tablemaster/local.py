@@ -1,6 +1,9 @@
 import pandas as pd
 import pathlib
 from pathlib import Path
+import logging
+
+logger = logging.getLogger(__name__)
 
 def detect_header_read_csv(path, det_rows=10):
     df = pd.read_csv(path)
@@ -39,33 +42,26 @@ def read(file, det_header=True):
     file_detect = list(Path().glob(file))
     file_detect = [i for i in file_detect if (str(i)[0]!="." or str(i)[:3]=="../")]
     if len(file_detect)>1:
-        print(f'There are more 1 file detected, please specify the file name! \n {file_detect}')
-        return "error"
-    else:
-        file_path = file_detect[0]
-        if file_path.suffix[:3] == '.xl':
-            try:
-                if det_header == True:
-                    df = detect_header_read_excel(file_path)
-                else:
-                    df = pd.read_excel(file_path)
-            except Exception as e:
-                print(e)
-        elif file_path.suffix[:4] == '.csv':
-            try:
-                if det_header == True:
-                    df = detect_header_read_csv(file_path)
-                else:
-                    df = pd.read_csv(file_path)
-            except Exception as e:
-                print(e)
-        else:
-            raise Exception(f'unsupported file type: {file_path.suffix}')
-        return df
+        raise ValueError(f'There are more than 1 files detected, please specify file name: {file_detect}')
+    if len(file_detect) == 0:
+        raise FileNotFoundError(f'No file matched: {file}')
+
+    file_path = file_detect[0]
+    if file_path.suffix[:3] == '.xl':
+        if det_header == True:
+            return detect_header_read_excel(file_path)
+        return pd.read_excel(file_path)
+
+    if file_path.suffix[:4] == '.csv':
+        if det_header == True:
+            return detect_header_read_csv(file_path)
+        return pd.read_csv(file_path)
+
+    raise Exception(f'unsupported file type: {file_path.suffix}')
 
 def batch_read(file, det_col='nan'):
     path_list = list(Path().glob(file))
-    print(f'below {len(path_list)} file found: {path_list}')
+    logger.info('below %s files found: %s', len(path_list), path_list)
     dataframes = []
     for i, file in enumerate(path_list):
         df = read(file)
@@ -75,13 +71,13 @@ def batch_read(file, det_col='nan'):
     for df in dataframes:
         if not any(equal_table(df, existing_df, det_col) for existing_df in unique_dataframes):
             unique_dataframes.append(df)
-    print(f'{len(unique_dataframes)}  unique files found!')
+    logger.info('%s unique files found', len(unique_dataframes))
     return pd.concat(unique_dataframes).reset_index(drop=True)
 
 
 def read_dfs(file, det_col='nan'):
     path_list = list(Path().glob(file))
-    print(f'below {len(path_list)} file found: {path_list}')
+    logger.info('below %s files found: %s', len(path_list), path_list)
     dataframes = []
     for i, file in enumerate(path_list):
         df = read(file)
@@ -90,5 +86,5 @@ def read_dfs(file, det_col='nan'):
     for df in dataframes:
         if not any(equal_table(df, existing_df, det_col) for existing_df in unique_dataframes):
             unique_dataframes.append(df)
-    print(f'{len(unique_dataframes)}  unique files found!')
+    logger.info('%s unique files found', len(unique_dataframes))
     return unique_dataframes

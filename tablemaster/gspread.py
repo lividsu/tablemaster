@@ -1,113 +1,130 @@
 import gspread
 import pandas as pd
+import re
+import warnings
+import logging
+from functools import lru_cache
 
-# 辅助函数，用于判断输入是ID还是名称
+logger = logging.getLogger(__name__)
+
 def _is_google_sheet_id(s):
-    """
-    一个简单的启发式方法，用来判断一个字符串是否是 Google Sheet 的ID。
-    Google Sheet ID 通常很长（例如44个字符），并且不含空格。
-    """
-    # 我们可以根据长度和是否包含空格来做一个简单的判断
     return len(s) > 40 and ' ' not in s
 
-def gs_read_df(map, service_account_path=None):
-    """
-    从 Google Sheet 读取数据到 DataFrame。
-    map[0] 可以是表格名称或表格ID。
-    """
-    print('...reading google sheets...')
-    if service_account_path:
-        gc = gspread.service_account(service_account_path)
-    else:
-        gc = gspread.service_account()
 
-    spreadsheet_identifier = map[0]
-    worksheet_name = map[1]
+def _is_cell_loc(value):
+    return isinstance(value, str) and re.match(r'^[A-Za-z]+[1-9]\d*$', value.strip()) is not None
+
+
+def _warn_deprecated(message):
+    warnings.warn(f'{message} This usage will be removed in a future release.', FutureWarning, stacklevel=3)
+
+
+def _resolve_service_account_path(cfg, service_account_path):
+    if service_account_path:
+        _warn_deprecated('service_account_path argument is deprecated; pass a cfg object instead.')
+        return service_account_path
+
+    if cfg is None:
+        _warn_deprecated('No cfg argument provided; use gs_read_df(address, cfg).')
+        return None
+
+    if isinstance(cfg, str):
+        _warn_deprecated('Passing a string path as the second argument is deprecated; pass a cfg object instead.')
+        return cfg
+
+    path = getattr(cfg, 'service_account_path', None)
+    if not path:
+        raise ValueError('Google config is missing service_account_path; please check cfg.')
+    return path
+
+
+@lru_cache(maxsize=8)
+def _get_gspread_client(service_account_path=None):
+    if service_account_path:
+        return gspread.service_account(service_account_path)
+    return gspread.service_account()
+
+
+def gs_read_df(address, cfg=None, service_account_path=None):
+    logger.info('reading google sheets')
+    sa_path = _resolve_service_account_path(cfg, service_account_path)
+    gc = _get_gspread_client(sa_path)
+
+    spreadsheet_identifier = address[0]
+    worksheet_name = address[1]
 
     try:
-        # 判断是使用ID还是名称打开
         if _is_google_sheet_id(spreadsheet_identifier):
-            print(f"...opening sheet by ID: {spreadsheet_identifier}...")
+            logger.info('opening sheet by ID: %s', spreadsheet_identifier)
             sh = gc.open_by_key(spreadsheet_identifier)
         else:
-            print(f"...opening sheet by name: {spreadsheet_identifier}...")
+            logger.info('opening sheet by name: %s', spreadsheet_identifier)
             sh = gc.open(spreadsheet_identifier)
         
         wks = sh.worksheet(worksheet_name)
         df = pd.DataFrame(wks.get_all_records())
-        print('...have read google sheets!...')
-        print(df.head())
+        logger.info('google sheets read success')
+        logger.debug('google sheets preview: %s', df.head())
         return df
 
     except gspread.exceptions.SpreadsheetNotFound:
-        print(f"Error: Spreadsheet '{spreadsheet_identifier}' not found.")
-        return None # 或者可以抛出异常 raise
+        logger.error("spreadsheet '%s' not found", spreadsheet_identifier)
+        return None
     except gspread.exceptions.WorksheetNotFound:
-        print(f"Error: Worksheet '{worksheet_name}' not found in the spreadsheet.")
-        return None # 或者可以抛出异常 raise
+        logger.error("worksheet '%s' not found in spreadsheet", worksheet_name)
+        return None
     except Exception as e:
-        print(f"An unexpected error occurred: {e}")
+        logger.exception('an unexpected error occurred: %s', e)
         return None
 
 
-def gs_write_df(map, df, loc='A1', service_account_path=None):
-    """
-    将 DataFrame 写入 Google Sheet。
-    map[0] 可以是表格名称或表格ID。
-    """
-    print('...writing google sheets...')
-    if service_account_path:
-        gc = gspread.service_account(service_account_path)
-    else:
-        gc = gspread.service_account()
+def gs_write_df(address, df, cfg=None, loc='A1', service_account_path=None):
+    if isinstance(cfg, str) and _is_cell_loc(cfg):
+        _warn_deprecated('Passing loc as the third positional argument is deprecated; use keyword loc=...')
+        if isinstance(loc, str) and not _is_cell_loc(loc) and service_account_path is None:
+            service_account_path = loc
+        loc = cfg
+        cfg = None
 
-    spreadsheet_identifier = map[0]
-    worksheet_name = map[1]
-    
-    # 预先判断是否为ID，这对于后续的错误处理很重要
+    logger.info('writing google sheets')
+    sa_path = _resolve_service_account_path(cfg, service_account_path)
+    gc = _get_gspread_client(sa_path)
+
+    spreadsheet_identifier = address[0]
+    worksheet_name = address[1]
+
     is_id = _is_google_sheet_id(spreadsheet_identifier)
 
     try:
-        # 尝试打开表格
         if is_id:
-            print(f"...opening sheet by ID: {spreadsheet_identifier}...")
+            logger.info('opening sheet by ID: %s', spreadsheet_identifier)
             sh = gc.open_by_key(spreadsheet_identifier)
         else:
-            print(f"...opening sheet by name: {spreadsheet_identifier}...")
+            logger.info('opening sheet by name: %s', spreadsheet_identifier)
             sh = gc.open(spreadsheet_identifier)
 
     except gspread.exceptions.SpreadsheetNotFound:
-        # 如果表格未找到，根据是ID还是名称来决定下一步操作
         if is_id:
-            # 如果使用ID都找不到，这是一个错误，因为我们无法用指定的ID创建新表
-            print(f"Error: Spreadsheet with ID '{spreadsheet_identifier}' not found. Cannot create a sheet with a specific ID.")
-            return # 终止函数
+            logger.error("spreadsheet ID '%s' not found, cannot create with specific ID", spreadsheet_identifier)
+            return
         else:
-            # 如果是名称找不到，我们可以创建它
-            print(f"Spreadsheet '{spreadsheet_identifier}' not found, will create one!")
+            logger.info("spreadsheet '%s' not found, creating one", spreadsheet_identifier)
             sh = gc.create(spreadsheet_identifier)
-            # 你可能想在这里分享权限给某些用户
-            # sh.share('your-email@example.com', perm_type='user', role='writer')
 
     try:
-        # 尝试打开工作表
         wks = sh.worksheet(worksheet_name)
     except gspread.exceptions.WorksheetNotFound:
-        print(f'Worksheet "{worksheet_name}" not found, will create one!')
+        logger.info('worksheet "%s" not found, creating one', worksheet_name)
         wks = sh.add_worksheet(title=worksheet_name, rows="100", cols="20")
-        
-    try:
-        # 清空并更新工作表内容
-        wks.clear()
-        # gspread V6+ 推荐使用 set_dataframe
-        # wks.set_dataframe(df, start=loc, copy_head=True) 
-        
-        # 你的原始方法，处理非数值类型
-        non_float_int_columns = df.select_dtypes(exclude=['float64', 'int64']).columns
-        for col in non_float_int_columns:
-            df[col] = df[col].astype(str)
-        wks.update(loc, ([df.columns.values.tolist()] + df.values.tolist()))
 
-        print('Data is written!')
+    try:
+        wks.clear()
+        df_copy = df.copy()
+        non_float_int_columns = df_copy.select_dtypes(exclude=['float64', 'int64']).columns
+        for col in non_float_int_columns:
+            df_copy[col] = df_copy[col].astype(str)
+        wks.update(loc, ([df_copy.columns.values.tolist()] + df_copy.values.tolist()))
+
+        logger.info('data is written')
     except Exception as e:
-        print(f"Failed to update worksheet: {e}")
+        logger.exception('failed to update worksheet: %s', e)

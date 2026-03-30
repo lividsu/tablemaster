@@ -1,17 +1,58 @@
 import json
+import logging
+import time
+from datetime import datetime, timedelta
+
 import requests
 import pandas as pd
 
+logger = logging.getLogger(__name__)
+_TOKEN_CACHE = {}
+
+
+def _request_with_retry(method, url, headers=None, params=None, json_data=None, data=None, timeout=30):
+    max_retries = 3
+    for attempt in range(max_retries):
+        response = requests.request(
+            method=method,
+            url=url,
+            headers=headers,
+            params=params,
+            json=json_data,
+            data=data,
+            timeout=timeout,
+        )
+        if response.status_code != 429:
+            return response
+        if attempt == max_retries - 1:
+            break
+        sleep_seconds = 2 ** attempt
+        logger.warning('feishu api rate limited (429), retry in %ss', sleep_seconds)
+        time.sleep(sleep_seconds)
+    raise requests.HTTPError(f'Feishu API rate limited after {max_retries} retries', response=response)
+
 
 def _get_tenant_access_token(feishu_cfg):
-    """获取飞书的 tenant_access_token"""
+    cache_key = (feishu_cfg.feishu_app_id, feishu_cfg.feishu_app_secret)
+    cached = _TOKEN_CACHE.get(cache_key)
+    now = datetime.utcnow()
+    if cached and now < cached['expire_at'] - timedelta(minutes=5):
+        return cached['token']
+
     feishu_url = "https://open.feishu.cn/open-apis/auth/v3/tenant_access_token/internal/"
     post_data = {
         "app_id": feishu_cfg.feishu_app_id,
         "app_secret": feishu_cfg.feishu_app_secret
     }
-    r = requests.post(feishu_url, data=post_data)
-    return r.json()["tenant_access_token"]
+    r = _request_with_retry("post", feishu_url, json_data=post_data)
+    body = r.json()
+    token = body["tenant_access_token"]
+    expire_seconds = int(body.get('expire', 7200))
+    _TOKEN_CACHE[cache_key] = {
+        'token': token,
+        'expire_at': now + timedelta(seconds=expire_seconds),
+    }
+    return token
 
 
 def _col_num_to_letter(n):
@@ -49,7 +90,7 @@ def fs_read_df(sheet_address, feishu_cfg):
         + sheet_address[0] + "/values/" + sheet_address[1]
         + "?valueRenderOption=ToString&dateTimeRenderOption=FormattedString"
     )
-    r = requests.get(url, headers=header)
+    r = _request_with_retry("get", url, headers=header)
     pull_data = r.json()['data']['valueRange']['values']
     return pd.DataFrame(pull_data[1:], columns=pull_data[0])
 
@@ -72,13 +113,25 @@ def fs_read_base(sheet_address, feishu_cfg):
         "content-type": "application/json",
         "Authorization": "Bearer " + str(tat)
     }
-    url = (
-        "https://open.feishu.cn/open-apis/bitable/v1/apps/" 
+    base_url = (
+        "https://open.feishu.cn/open-apis/bitable/v1/apps/"
         + sheet_address[0] + "/tables/" + sheet_address[1] + '/records'
-        + "?valueRenderOption=ToString&dateTimeRenderOption=FormattedString"
     )
-    r = requests.get(url, headers=header)
-    pull_data = r.json()['data']['items']
+    pull_data = []
+    page_token = None
+    has_more = True
+
+    while has_more:
+        query_params = "?valueRenderOption=ToString&dateTimeRenderOption=FormattedString&page_size=500"
+        if page_token:
+            query_params += f"&page_token={page_token}"
+
+        r = _request_with_retry("get", base_url + query_params, headers=header)
+        data = r.json().get('data', {})
+        pull_data.extend(data.get('items', []))
+        has_more = data.get('has_more', False)
+        page_token = data.get('page_token')
+
     pull_data_parse = [x['fields'] for x in pull_data]
     return pd.DataFrame(pull_data_parse)
 
@@ -103,7 +156,7 @@ def fs_write_df(sheet_address, df, feishu_cfg, loc='A1', clear_sheet=True):
         >>> sheet_address = ['shtcnxxxxxx', 'sheet_id_xxx']
         >>> fs_write_df(sheet_address, df, feishu_cfg)
     """
-    print('...writing feishu sheets...')
+    logger.info('writing feishu sheets')
     
     # 获取 access token
     tat = _get_tenant_access_token(feishu_cfg)
@@ -117,55 +170,17 @@ def fs_write_df(sheet_address, df, feishu_cfg, loc='A1', clear_sheet=True):
     
     # 清空工作表（如果需要）
     if clear_sheet:
-        print(f'...reading existing data to determine clear range...')
+        logger.info('clearing sheet by values_batch_clear api')
         try:
-            # 先读取现有数据，获取实际数据范围
-            read_url = (
-                f"https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values/{sheet_id}"
-                "?valueRenderOption=ToString&dateTimeRenderOption=FormattedString"
-            )
-            read_resp = requests.get(read_url, headers=header)
-            
-            if read_resp.status_code == 200 and read_resp.json().get('code') == 0:
-                existing_data = read_resp.json().get('data', {}).get('valueRange', {}).get('values', [])
-                
-                if existing_data:
-                    old_rows = len(existing_data)
-                    old_cols = max(len(row) for row in existing_data) if existing_data else 0
-                    
-                    if old_rows > 0 and old_cols > 0:
-                        print(f'...existing data: {old_rows} rows x {old_cols} cols...')
-                        
-                        # 构建清空范围
-                        end_col = _col_num_to_letter(old_cols)
-                        clear_range = f"{sheet_id}!A1:{end_col}{old_rows}"
-                        
-                        print(f'...clearing range: {clear_range}...')
-                        
-                        # 创建空值矩阵来覆盖
-                        empty_values = [[""] * old_cols for _ in range(old_rows)]
-                        
-                        clear_data = {
-                            "valueRange": {
-                                "range": clear_range,
-                                "values": empty_values
-                            }
-                        }
-                        
-                        clear_url = f"https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values"
-                        clear_resp = requests.put(clear_url, data=json.dumps(clear_data), headers=header)
-                        
-                        if clear_resp.json().get('code') == 0:
-                            print('...sheet cleared!')
-                        else:
-                            print(f"Warning: Failed to clear sheet: {clear_resp.json().get('msg')}")
-                else:
-                    print('...sheet is empty, no need to clear...')
+            clear_url = f"https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values_batch_clear"
+            clear_data = {"ranges": [f"{sheet_id}!A1:XFD1048576"]}
+            clear_resp = _request_with_retry("post", clear_url, headers=header, json_data=clear_data)
+            if clear_resp.json().get('code') == 0:
+                logger.info('sheet cleared')
             else:
-                print(f"Warning: Could not read existing data: {read_resp.json().get('msg', 'Unknown error')}")
-                    
+                logger.warning("failed to clear sheet: %s", clear_resp.json().get('msg'))
         except Exception as e:
-            print(f"Warning: Failed to clear sheet: {e}")
+            logger.warning('failed to clear sheet: %s', e)
     
     # 处理 DataFrame 数据类型
     df_copy = df.copy()
@@ -209,7 +224,7 @@ def fs_write_df(sheet_address, df, feishu_cfg, loc='A1', clear_sheet=True):
     # 构建写入范围
     write_range = f"{sheet_id}!{start_col}{start_row}:{end_col}{end_row}"
     
-    print(f'...writing to range: {write_range}...')
+    logger.info('writing to range: %s', write_range)
     
     # 构建请求数据
     post_data = {
@@ -223,19 +238,19 @@ def fs_write_df(sheet_address, df, feishu_cfg, loc='A1', clear_sheet=True):
     url = f"https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values"
     
     try:
-        r = requests.put(url, data=json.dumps(post_data), headers=header)
+        r = _request_with_retry("put", url, headers=header, json_data=post_data)
         response = r.json()
         
         if response.get('code') == 0:
-            print('Data is written!')
+            logger.info('data is written')
         else:
-            print(f"Failed to write data: {response.get('msg', 'Unknown error')}")
-            print(f"Error code: {response.get('code')}")
+            logger.error('failed to write data: %s', response.get('msg', 'Unknown error'))
+            logger.error('error code: %s', response.get('code'))
         
         return response
         
     except Exception as e:
-        print(f"Failed to write data: {e}")
+        logger.exception('failed to write data: %s', e)
         raise
 
 def _get_bitable_fields(app_token, table_id, header):
@@ -246,13 +261,13 @@ def _get_bitable_fields(app_token, table_id, header):
         set: 字段名集合
     """
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/fields"
-    r = requests.get(url, headers=header)
+    r = _request_with_retry("get", url, headers=header)
     
     if r.status_code == 200 and r.json().get('code') == 0:
         items = r.json().get('data', {}).get('items', [])
         return {item['field_name'] for item in items}
     else:
-        print(f"Warning: Failed to get fields: {r.json().get('msg', 'Unknown error')}")
+        logger.warning("failed to get fields: %s", r.json().get('msg', 'Unknown error'))
         return set()
 
 def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
@@ -274,7 +289,7 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
         - 多维表格的写入是基于字段名称的，DataFrame的列名需要与表格中的字段名完全匹配
         - 不存在的字段会被自动跳过并打印警告信息
     """
-    print('...writing feishu bitable...')
+    logger.info('writing feishu bitable')
     
     tat = _get_tenant_access_token(feishu_cfg)
     header = {
@@ -286,14 +301,14 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
     table_id = sheet_address[1]
     
     # 获取多维表格中的字段名
-    print('...fetching bitable fields...')
+    logger.info('fetching bitable fields')
     existing_fields = _get_bitable_fields(app_token, table_id, header)
     
     if not existing_fields:
-        print("Error: Could not fetch table fields or table has no fields!")
+        logger.error('could not fetch table fields or table has no fields')
         return None
     
-    print(f'...table has {len(existing_fields)} fields: {existing_fields}...')
+    logger.info('table has %s fields', len(existing_fields))
     
     # 检查 DataFrame 列名与表格字段的匹配情况
     df_columns = set(df.columns.tolist())
@@ -303,38 +318,50 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
     valid_fields = df_columns & existing_fields
     
     if missing_fields:
-        print(f'\n⚠️  WARNING: The following columns do NOT exist in bitable and will be SKIPPED:')
+        logger.warning('the following columns do not exist in bitable and will be skipped')
         for field in sorted(missing_fields):
-            print(f'    - "{field}"')
-        print()
+            logger.warning('skip column: %s', field)
     
     if not valid_fields:
-        print("Error: No valid fields to write! All DataFrame columns are missing in bitable.")
+        logger.error('no valid fields to write, all dataframe columns are missing in bitable')
         return None
     
-    print(f'...will write {len(valid_fields)} valid fields: {valid_fields}...')
+    logger.info('will write %s valid fields', len(valid_fields))
     
     # 清空数据表（如果需要）
     if clear_table:
-        print('...clearing bitable records...')
+        logger.info('clearing bitable records')
         try:
-            # 先获取所有记录的 record_id
             list_url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records"
-            list_resp = requests.get(list_url, headers=header)
-            
-            if list_resp.status_code == 200:
-                items = list_resp.json().get('data', {}).get('items', [])
-                record_ids = [item['record_id'] for item in items]
-                
-                if record_ids:
-                    # 批量删除记录
-                    delete_url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_delete"
-                    delete_data = {"records": record_ids}
-                    requests.post(delete_url, data=json.dumps(delete_data), headers=header)
-                    print(f'...deleted {len(record_ids)} records...')
-                    
+            record_ids = []
+            page_token = None
+            has_more = True
+
+            while has_more:
+                query_params = "?page_size=500"
+                if page_token:
+                    query_params += f"&page_token={page_token}"
+                list_resp = _request_with_retry("get", list_url + query_params, headers=header)
+
+                if list_resp.status_code != 200:
+                    break
+
+                data = list_resp.json().get('data', {})
+                items = data.get('items', [])
+                record_ids.extend([item['record_id'] for item in items])
+                has_more = data.get('has_more', False)
+                page_token = data.get('page_token')
+
+            if record_ids:
+                delete_url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/records/batch_delete"
+                for i in range(0, len(record_ids), 500):
+                    batch_ids = record_ids[i:i + 500]
+                    delete_data = {"records": batch_ids}
+                    _request_with_retry("post", delete_url, headers=header, json_data=delete_data)
+                logger.info('deleted %s records', len(record_ids))
+
         except Exception as e:
-            print(f"Warning: Failed to clear table: {e}")
+            logger.warning('failed to clear table: %s', e)
     
     # 处理 DataFrame - 只保留有效字段
     df_copy = df[list(valid_fields)].copy()
@@ -425,7 +452,7 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
         records.append({"fields": fields})
     
     if skipped_cols:
-        print(f'⚠️  WARNING: Skipped columns due to unsupported data types: {skipped_cols}')
+        logger.warning('skipped columns due to unsupported data types: %s', skipped_cols)
     
     # 批量写入（每次最多500条）
     batch_size = 500
@@ -438,29 +465,25 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
         post_data = {"records": batch}
         
         try:
-            r = requests.post(url, data=json.dumps(post_data), headers=header)
+            r = _request_with_retry("post", url, headers=header, json_data=post_data)
             response = r.json()
             all_responses.append(response)
             
             if response.get('code') == 0:
-                print(f'...batch {i // batch_size + 1}: wrote {len(batch)} records...')
+                logger.info('batch %s wrote %s records', i // batch_size + 1, len(batch))
             else:
-                print(f"Failed to write batch: {response.get('msg', 'Unknown error')}")
+                logger.error('failed to write batch: %s', response.get('msg', 'Unknown error'))
                 
         except Exception as e:
-            print(f"Failed to write batch: {e}")
+            logger.exception('failed to write batch: %s', e)
     
-    # 打印写入总结
-    print('\n' + '='*50)
-    print('WRITE SUMMARY:')
-    print(f'  - Total records: {len(records)}')
-    print(f'  - Fields written: {len(valid_fields)}')
+    logger.info('write summary total records: %s', len(records))
+    logger.info('write summary fields written: %s', len(valid_fields))
     if missing_fields:
-        print(f'  - Fields skipped (not in table): {len(missing_fields)}')
+        logger.info('write summary fields skipped: %s', len(missing_fields))
         for field in sorted(missing_fields):
-            print(f'      × {field}')
-    print('='*50)
-    print('Data is written!')
+            logger.info('skip field: %s', field)
+    logger.info('data is written')
     
     return all_responses
 

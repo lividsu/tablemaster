@@ -1,7 +1,20 @@
- db_name_example:
-   name: db_name_example
-   user: user_name_example
-   password: pw_example
-   host: host_example
-   database: db_example
-   port: port_example
+mydb:
+  host: 10.0.0.1
+  user: admin
+  password: secret
+  database: bake_prod
+
+db_tidb:
+  host: sh.internal
+  user: reader
+  password: xxx
+  database: analytics
+  db_type: tidb
+  use_ssl: true
+
+feishu_prod:
+  feishu_app_id: cli_xxx
+  feishu_app_secret: yyy
+
+gsheet:
+  service_account_path: /home/ubuntu/.config/gsheet_sa.json

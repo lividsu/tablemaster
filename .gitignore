@@ -24,3 +24,11 @@ MANIFEST
 
 # Jupyter Notebook
 .ipynb_checkpoints
+
+# Cache files
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
