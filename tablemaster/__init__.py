@@ -20,6 +20,26 @@ def __getattr__(name: str):
         ('sync',): 'sync',
         ('utils',): 'utils',
         ('DBConfig', 'FeishuConfig', 'GoogleConfig', 'ConfigNamespace', 'read_cfg'): 'config',
+        (
+            'load_schema_definitions',
+            'introspect_tables',
+            'generate_plan',
+            'render_plan',
+            'save_plan',
+            'load_plan',
+            'apply_plan',
+            'init_scaffold',
+            'pull_schema',
+            'write_pulled_schema',
+            'ColumnDef',
+            'IndexDef',
+            'TableDef',
+            'ActualColumn',
+            'ActualTable',
+            'PlanAction',
+            'Plan',
+            'ApplyResult',
+        ): 'schema',
     }
     for names, module in symbol_module_map.items():
         if name in names:

@@ -9,6 +9,7 @@
 - Built-in Feishu and Google Sheets connectors
 - Local CSV/Excel ingestion utilities
 - Declarative two-way sync between Feishu Sheet and database table
+- Schema-as-Code workflow (`init → schema plan → schema apply`)
 - Configuration-first design for reproducible automation
 
 ## Installation
@@ -22,10 +23,11 @@ pip install -U tablemaster
 Install backend-specific extras as needed:
 
 ```bash
-pip install -U "tablemaster[mysql]"    # MySQL/TiDB database support
+pip install -U "tablemaster[database]" # Database support (MySQL/TiDB)
 pip install -U "tablemaster[feishu]"   # Feishu/Lark connectors
 pip install -U "tablemaster[gspread]"  # Google Sheets connectors
 pip install -U "tablemaster[local]"    # Local CSV/Excel helpers
+pip install -U "tablemaster[schema]"   # Schema management + SQLAlchemy + MySQL/PostgreSQL DB drivers
 pip install -U "tablemaster[all]"      # Everything above
 ```
 
@@ -78,6 +80,14 @@ db_tidb:
   db_type: tidb
   use_ssl: true
   ssl_ca: /path/to/ca.pem
+
+db_pg:
+  host: 10.0.0.2
+  user: postgres
+  password: secret
+  database: analytics
+  port: 5432
+  db_type: postgresql
 
 feishu_prod:
   feishu_app_id: cli_xxx
@@ -166,6 +176,33 @@ merged = tm.sync(
 )
 ```
 
+### Schema management (YAML-driven)
+
+```bash
+tablemaster init
+tablemaster schema plan mydb --cfg-path ./cfg.yaml
+tablemaster schema apply mydb --cfg-path ./cfg.yaml
+tablemaster schema pull mydb --cfg-path ./cfg.yaml
+```
+
+Example schema file:
+
+```yaml
+table: ods_orders
+columns:
+  - name: id
+    type: BIGINT
+    primary_key: true
+    nullable: false
+  - name: order_no
+    type: VARCHAR(64)
+    nullable: false
+indexes:
+  - name: idx_order_no
+    columns: [order_no]
+    unique: true
+```
+
 ## CLI
 
 `tablemaster` now ships with a built-in CLI:
@@ -185,6 +222,10 @@ tablemaster db query "SELECT * FROM orders LIMIT 20" --cfg-key mydb --cfg-path .
 tablemaster db query "SELECT * FROM orders" --cfg-key mydb --output ./out/orders.csv
 tablemaster local read "*orders_2026*" --limit 10
 tablemaster local read "*orders_2026*" --no-det-header
+tablemaster init --cfg-path ./cfg.yaml
+tablemaster schema plan mydb --cfg-path ./cfg.yaml --output ./plan.json
+tablemaster schema apply mydb --cfg-path ./cfg.yaml --plan-file ./plan.json --auto-approve
+tablemaster schema pull mydb --cfg-path ./cfg.yaml --output-dir ./schema
 ```
 
 CLI command groups:
@@ -195,6 +236,10 @@ CLI command groups:
 - `db query <sql>`: Run SQL with `--cfg-key`; use `--limit` to control stdout preview and `--output` to export full result as CSV.
 - `local read <pattern>`: Read one local CSV/Excel match and print preview; use `--det-header/--no-det-header` to control header detection.
 - `config list`: List top-level keys from config.
+- `init`: Bootstrap `cfg.yaml` and `schema/<connection>/` scaffold in current directory.
+- `schema plan <connection>`: Compare YAML schema and live DB, print/apply-safe plan.
+- `schema apply <connection>`: Execute DDL actions from generated or saved plan.
+- `schema pull <connection>`: Generate YAML schema files from live DB tables.
 
 `--cfg-path` accepts either a config file path or a directory containing `cfg.yaml`.
 
@@ -206,10 +251,13 @@ CLI command groups:
 - Local files: `read`, `batch_read`, `read_dfs`
 - Sync: `sync`
 - Config: `load_cfg`
+- Schema: `load_schema_definitions`, `introspect_tables`, `generate_plan`, `render_plan`, `save_plan`, `load_plan`, `apply_plan`, `init_scaffold`, `pull_schema`, `write_pulled_schema`
 
 ## Notes
 
 - Python 3.9+ is required.
 - CLI entrypoint is `tablemaster`; use `tablemaster --help` for command details.
 - `tm.cfg` and `read_cfg()` are backward-compatible but deprecated in favor of `load_cfg()`.
-- PostgreSQL upsert is supported by code path; install PostgreSQL driver dependencies separately when needed.
+- `tablemaster[database]` is the recommended DB extra name; `tablemaster[mysql]` remains available for compatibility.
+- PostgreSQL is supported (`db_type: postgresql`) for query/execute and upsert (`ON CONFLICT`).
+- For PostgreSQL dependencies, use `tablemaster[schema]` or install `SQLAlchemy` + `psycopg2-binary` manually.

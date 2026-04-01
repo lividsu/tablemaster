@@ -1,0 +1,35 @@
+table: ods_orders
+comment: 原始订单表
+columns:
+  - name: id
+    type: BIGINT
+    primary_key: true
+    nullable: false
+    comment: 主键
+  - name: order_no
+    type: VARCHAR(64)
+    nullable: false
+    comment: 订单编号
+  - name: user_id
+    type: BIGINT
+    nullable: true
+    comment: 用户ID
+  - name: amount
+    type: DECIMAL(12,2)
+    default: "0.00"
+    comment: 金额
+  - name: status
+    type: SMALLINT
+    default: "0"
+    comment: 状态
+  - name: created_at
+    type: TIMESTAMP
+    nullable: false
+    default: "CURRENT_TIMESTAMP"
+    comment: 创建时间
+indexes:
+  - name: idx_order_no
+    columns: [order_no]
+    unique: true
+  - name: idx_user_id
+    columns: [user_id]

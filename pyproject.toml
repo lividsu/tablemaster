@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tablemaster"
-version = "2.0.0"
+version = "2.1.0"
 description = "tablemaster is a Python toolkit for moving and managing tabular data across databases, Feishu/Lark, Google Sheets, and local files with one consistent API."
 readme = "README.md"
 requires-python = ">=3.9"
@@ -20,12 +20,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
+database = ["PyMySQL>=1.1", "SQLAlchemy>=2.0"]
 mysql = ["PyMySQL>=1.1", "SQLAlchemy>=2.0"]
 feishu = ["requests>=2.28"]
 gspread = ["gspread>=6"]
 local = ["openpyxl>=3.1", "pyarrow>=14"]
+schema = ["SQLAlchemy>=2.0", "PyMySQL>=1.1", "psycopg2-binary>=2.9"]
 all = [
-    "tablemaster[mysql,feishu,gspread,local]",
+    "tablemaster[database,feishu,gspread,local,schema]",
 ]
 
 [project.urls]
