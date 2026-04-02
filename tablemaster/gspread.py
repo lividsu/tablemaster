@@ -68,14 +68,16 @@ def gs_read_df(address, cfg=None, service_account_path=None):
         return df
 
     except gspread.exceptions.SpreadsheetNotFound:
-        logger.error("spreadsheet '%s' not found", spreadsheet_identifier)
-        return None
+        message = f"spreadsheet '{spreadsheet_identifier}' not found"
+        logger.error(message)
+        raise ValueError(message)
     except gspread.exceptions.WorksheetNotFound:
-        logger.error("worksheet '%s' not found in spreadsheet", worksheet_name)
-        return None
+        message = f"worksheet '{worksheet_name}' not found in spreadsheet"
+        logger.error(message)
+        raise ValueError(message)
     except Exception as e:
         logger.exception('an unexpected error occurred: %s', e)
-        return None
+        raise
 
 
 def gs_write_df(address, df, cfg=None, loc='A1', service_account_path=None):
@@ -105,8 +107,9 @@ def gs_write_df(address, df, cfg=None, loc='A1', service_account_path=None):
 
     except gspread.exceptions.SpreadsheetNotFound:
         if is_id:
-            logger.error("spreadsheet ID '%s' not found, cannot create with specific ID", spreadsheet_identifier)
-            return
+            message = f"spreadsheet ID '{spreadsheet_identifier}' not found, cannot create with specific ID"
+            logger.error(message)
+            raise ValueError(message)
         else:
             logger.info("spreadsheet '%s' not found, creating one", spreadsheet_identifier)
             sh = gc.create(spreadsheet_identifier)
@@ -128,3 +131,4 @@ def gs_write_df(address, df, cfg=None, loc='A1', service_account_path=None):
         logger.info('data is written')
     except Exception as e:
         logger.exception('failed to update worksheet: %s', e)
+        raise

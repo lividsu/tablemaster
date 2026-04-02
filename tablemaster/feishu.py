@@ -178,9 +178,10 @@ def fs_write_df(sheet_address, df, feishu_cfg, loc='A1', clear_sheet=True):
             if clear_resp.json().get('code') == 0:
                 logger.info('sheet cleared')
             else:
-                logger.warning("failed to clear sheet: %s", clear_resp.json().get('msg'))
+                raise RuntimeError(f"failed to clear sheet: {clear_resp.json().get('msg')}")
         except Exception as e:
-            logger.warning('failed to clear sheet: %s', e)
+            logger.exception('failed to clear sheet: %s', e)
+            raise
     
     # 处理 DataFrame 数据类型
     df_copy = df.copy()
@@ -305,8 +306,7 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
     existing_fields = _get_bitable_fields(app_token, table_id, header)
     
     if not existing_fields:
-        logger.error('could not fetch table fields or table has no fields')
-        return None
+        raise ValueError('could not fetch table fields or table has no fields')
     
     logger.info('table has %s fields', len(existing_fields))
     
@@ -323,8 +323,7 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
             logger.warning('skip column: %s', field)
     
     if not valid_fields:
-        logger.error('no valid fields to write, all dataframe columns are missing in bitable')
-        return None
+        raise ValueError('no valid fields to write, all dataframe columns are missing in bitable')
     
     logger.info('will write %s valid fields', len(valid_fields))
     
@@ -361,7 +360,8 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
                 logger.info('deleted %s records', len(record_ids))
 
         except Exception as e:
-            logger.warning('failed to clear table: %s', e)
+            logger.exception('failed to clear table: %s', e)
+            raise
     
     # 处理 DataFrame - 只保留有效字段
     df_copy = df[list(valid_fields)].copy()
@@ -444,7 +444,7 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
                     str_val = str(value)
                     if str_val and str_val != 'None' and str_val != 'nan':
                         fields[col] = str_val
-                except:
+                except Exception:
                     if col not in skipped_cols:
                         skipped_cols.add(col)
                     continue
@@ -457,6 +457,7 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
     # 批量写入（每次最多500条）
     batch_size = 500
     all_responses = []
+    failed_batches = []
     
     for i in range(0, len(records), batch_size):
         batch = records[i:i + batch_size]
@@ -473,9 +474,11 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
                 logger.info('batch %s wrote %s records', i // batch_size + 1, len(batch))
             else:
                 logger.error('failed to write batch: %s', response.get('msg', 'Unknown error'))
+                failed_batches.append((i // batch_size + 1, response.get('msg', 'Unknown error')))
                 
         except Exception as e:
             logger.exception('failed to write batch: %s', e)
+            failed_batches.append((i // batch_size + 1, str(e)))
     
     logger.info('write summary total records: %s', len(records))
     logger.info('write summary fields written: %s', len(valid_fields))
@@ -483,6 +486,8 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
         logger.info('write summary fields skipped: %s', len(missing_fields))
         for field in sorted(missing_fields):
             logger.info('skip field: %s', field)
+    if failed_batches:
+        raise RuntimeError(f'bitable write failed for {len(failed_batches)} batch(es): {failed_batches}')
     logger.info('data is written')
     
     return all_responses

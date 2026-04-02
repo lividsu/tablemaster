@@ -102,8 +102,35 @@ class SchemaCoreTests(unittest.TestCase):
             paths = write_pulled_schema(tables, root / 'schema' / 'mydb')
             self.assertEqual(1, len(paths))
             content = paths[0].read_text(encoding='utf-8')
-            self.assertIn('table: orders', content)
-            self.assertIn('primary_key: true', content)
+            self.assertIn('"table": "orders"', content)
+            self.assertIn('"primary_key": true', content)
+
+    def test_pull_quotes_comment_with_colon(self):
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            tables = [
+                ActualTable(
+                    table='orders',
+                    columns=[
+                        ActualColumn(
+                            name='id',
+                            type='BIGINT',
+                            nullable=False,
+                            default=None,
+                            comment='主键:业务单号',
+                            primary_key=True,
+                        )
+                    ],
+                    indexes=[],
+                    comment='订单:主表',
+                )
+            ]
+            paths = write_pulled_schema(tables, root / 'schema' / 'mydb')
+            content = paths[0].read_text(encoding='utf-8')
+            self.assertIn('"comment": "订单:主表"', content)
+            loaded = load_schema_definitions(connection='mydb', root_dir=root / 'schema')
+            self.assertEqual('订单:主表', loaded[0].comment)
+            self.assertEqual('主键:业务单号', loaded[0].columns[0].comment)
 
 
 if __name__ == '__main__':

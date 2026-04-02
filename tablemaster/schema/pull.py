@@ -8,6 +8,17 @@ import yaml
 from .models import ActualTable
 
 
+class _QuotedStringDumper(yaml.SafeDumper):
+    pass
+
+
+def _quoted_string_representer(dumper, value):
+    return dumper.represent_scalar('tag:yaml.org,2002:str', value, style='"')
+
+
+_QuotedStringDumper.add_representer(str, _quoted_string_representer)
+
+
 def _table_to_payload(table: ActualTable) -> dict:
     payload: dict = {
         'table': table.table,
@@ -51,7 +62,13 @@ def write_pulled_schema(
         target = out / f'{table.table}.yaml'
         payload = _table_to_payload(table)
         with target.open('w', encoding='utf-8') as f:
-            yaml.safe_dump(payload, f, sort_keys=False, allow_unicode=True)
+            yaml.dump(
+                payload,
+                f,
+                Dumper=_QuotedStringDumper,
+                sort_keys=False,
+                allow_unicode=True,
+            )
         written.append(target)
     return written
 
