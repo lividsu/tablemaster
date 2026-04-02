@@ -90,3 +90,22 @@ class BaseDialect(ABC):
     @abstractmethod
     def gen_drop_index(self, table: str, index_name: str, schema_name: str | None = None) -> str:
         pass
+
+    @abstractmethod
+    def gen_drop_primary_key(
+        self,
+        table: str,
+        primary_key_name: str | None = None,
+        schema_name: str | None = None,
+    ) -> str:
+        pass
+
+    @abstractmethod
+    def gen_add_primary_key(
+        self,
+        table: str,
+        columns: list[str],
+        primary_key_name: str | None = None,
+        schema_name: str | None = None,
+    ) -> str:
+        pass

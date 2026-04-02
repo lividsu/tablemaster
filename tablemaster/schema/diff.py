@@ -94,6 +94,23 @@ def generate_plan(
 
         desired_cols = {c.name: c for c in table_def.columns}
         actual_cols = {c.name: c for c in current.columns}
+        desired_pk = [c.name for c in table_def.columns if c.primary_key]
+        actual_pk = list(current.primary_key_columns or [c.name for c in current.columns if c.primary_key])
+        primary_key_changed = desired_pk != actual_pk
+
+        if primary_key_changed and actual_pk:
+            plan.actions.append(
+                _action(
+                    'DROP_PRIMARY_KEY',
+                    table_name,
+                    ddl=dialect.gen_drop_primary_key(
+                        table_name,
+                        primary_key_name=current.primary_key_name,
+                        schema_name=table_def.schema_name,
+                    ),
+                    detail={'old': actual_pk, 'new': desired_pk},
+                )
+            )
 
         for col_name, desired_col in desired_cols.items():
             actual_col = actual_cols.get(col_name)
@@ -126,7 +143,8 @@ def generate_plan(
                     )
                 )
 
-            if bool(desired_col.nullable) != bool(actual_col.nullable):
+            desired_nullable = bool(desired_col.nullable) and not bool(desired_col.primary_key)
+            if desired_nullable != bool(actual_col.nullable):
                 plan.actions.append(
                     _action(
                         'ALTER_COLUMN_NULLABLE',
@@ -135,11 +153,11 @@ def generate_plan(
                         ddl=dialect.gen_alter_column_nullable(
                             table_name,
                             col_name,
-                            desired_col.nullable,
+                            desired_nullable,
                             col_type=dialect.map_type(desired_col.type),
                             schema_name=table_def.schema_name,
                         ),
-                        detail={'old': actual_col.nullable, 'new': desired_col.nullable},
+                        detail={'old': actual_col.nullable, 'new': desired_nullable},
                     )
                 )
 
@@ -189,6 +207,21 @@ def generate_plan(
                         detail={'message': f'{table_name}.{col_name} exists in DB but not in schema'},
                     )
                 )
+
+        if primary_key_changed and desired_pk:
+            plan.actions.append(
+                _action(
+                    'ADD_PRIMARY_KEY',
+                    table_name,
+                    ddl=dialect.gen_add_primary_key(
+                        table_name,
+                        desired_pk,
+                        primary_key_name=current.primary_key_name,
+                        schema_name=table_def.schema_name,
+                    ),
+                    detail={'old': actual_pk, 'new': desired_pk},
+                )
+            )
 
         desired_indexes = {idx.name: idx for idx in table_def.indexes}
         actual_indexes = {idx.name: idx for idx in current.indexes}

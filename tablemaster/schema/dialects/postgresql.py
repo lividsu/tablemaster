@@ -60,7 +60,9 @@ class PostgreSQLDialect(BaseDialect):
         results: list[ActualTable] = []
         for name in names:
             columns = []
-            pk_cols = set(inspector.get_pk_constraint(name, schema=schema).get('constrained_columns') or [])
+            pk_constraint = inspector.get_pk_constraint(name, schema=schema) or {}
+            pk_column_list = list(pk_constraint.get('constrained_columns') or [])
+            pk_cols = set(pk_column_list)
             for col in inspector.get_columns(name, schema=schema):
                 columns.append(
                     ActualColumn(
@@ -87,7 +89,15 @@ class PostgreSQLDialect(BaseDialect):
             except Exception:
                 table_comment = None
             results.append(
-                ActualTable(table=name, columns=columns, indexes=indexes, comment=table_comment, schema_name=schema)
+                ActualTable(
+                    table=name,
+                    columns=columns,
+                    indexes=indexes,
+                    comment=table_comment,
+                    schema_name=schema,
+                    primary_key_columns=pk_column_list,
+                    primary_key_name=pk_constraint.get('name'),
+                )
             )
         return results
 
@@ -189,3 +199,29 @@ class PostgreSQLDialect(BaseDialect):
     def gen_drop_index(self, table: str, index_name: str, schema_name: str | None = None) -> str:
         schema = schema_name or 'public'
         return f'DROP INDEX {_quote(schema)}.{_quote(index_name)}'
+
+    def gen_drop_primary_key(
+        self,
+        table: str,
+        primary_key_name: str | None = None,
+        schema_name: str | None = None,
+    ) -> str:
+        constraint_name = primary_key_name or f'{table}_pkey'
+        return (
+            f'ALTER TABLE {self._qualified_table(table, schema_name)} '
+            f'DROP CONSTRAINT {_quote(constraint_name)}'
+        )
+
+    def gen_add_primary_key(
+        self,
+        table: str,
+        columns: list[str],
+        primary_key_name: str | None = None,
+        schema_name: str | None = None,
+    ) -> str:
+        constraint_name = primary_key_name or f'{table}_pkey'
+        cols_sql = ', '.join(_quote(c) for c in columns)
+        return (
+            f'ALTER TABLE {self._qualified_table(table, schema_name)} '
+            f'ADD CONSTRAINT {_quote(constraint_name)} PRIMARY KEY ({cols_sql})'
+        )

@@ -57,7 +57,9 @@ class MySQLDialect(BaseDialect):
         results: list[ActualTable] = []
         for name in names:
             columns = []
-            pk_cols = set(inspector.get_pk_constraint(name, schema=database).get('constrained_columns') or [])
+            pk_constraint = inspector.get_pk_constraint(name, schema=database) or {}
+            pk_column_list = list(pk_constraint.get('constrained_columns') or [])
+            pk_cols = set(pk_column_list)
             for col in inspector.get_columns(name, schema=database):
                 columns.append(
                     ActualColumn(
@@ -83,7 +85,16 @@ class MySQLDialect(BaseDialect):
                 table_comment = (inspector.get_table_comment(name, schema=database) or {}).get('text')
             except Exception:
                 table_comment = None
-            results.append(ActualTable(table=name, columns=columns, indexes=indexes, comment=table_comment))
+            results.append(
+                ActualTable(
+                    table=name,
+                    columns=columns,
+                    indexes=indexes,
+                    comment=table_comment,
+                    primary_key_columns=pk_column_list,
+                    primary_key_name=pk_constraint.get('name'),
+                )
+            )
         return results
 
     def _qualified_table(self, table: str, schema_name: str | None = None) -> str:
@@ -190,3 +201,21 @@ class MySQLDialect(BaseDialect):
 
     def gen_drop_index(self, table: str, index_name: str, schema_name: str | None = None) -> str:
         return f'DROP INDEX {_quote(index_name)} ON {self._qualified_table(table, schema_name)}'
+
+    def gen_drop_primary_key(
+        self,
+        table: str,
+        primary_key_name: str | None = None,
+        schema_name: str | None = None,
+    ) -> str:
+        return f'ALTER TABLE {self._qualified_table(table, schema_name)} DROP PRIMARY KEY'
+
+    def gen_add_primary_key(
+        self,
+        table: str,
+        columns: list[str],
+        primary_key_name: str | None = None,
+        schema_name: str | None = None,
+    ) -> str:
+        cols_sql = ', '.join(_quote(c) for c in columns)
+        return f'ALTER TABLE {self._qualified_table(table, schema_name)} ADD PRIMARY KEY ({cols_sql})'

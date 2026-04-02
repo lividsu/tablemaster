@@ -50,6 +50,8 @@ class ActualTable:
     indexes: list[IndexDef]
     comment: Optional[str] = None
     schema_name: Optional[str] = None
+    primary_key_columns: list[str] = field(default_factory=list)
+    primary_key_name: Optional[str] = None
 
 
 @dataclass

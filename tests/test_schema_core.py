@@ -3,6 +3,7 @@ from tempfile import TemporaryDirectory
 import unittest
 
 from tablemaster.schema.dialects.mysql import MySQLDialect
+from tablemaster.schema.dialects.postgresql import PostgreSQLDialect
 from tablemaster.schema.diff import generate_plan
 from tablemaster.schema.loader import load_schema_definitions
 from tablemaster.schema.models import ActualColumn, ActualTable
@@ -131,6 +132,117 @@ class SchemaCoreTests(unittest.TestCase):
             loaded = load_schema_definitions(connection='mydb', root_dir=root / 'schema')
             self.assertEqual('订单:主表', loaded[0].comment)
             self.assertEqual('主键:业务单号', loaded[0].columns[0].comment)
+
+    def test_diff_rebuilds_composite_primary_key_for_postgresql(self):
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            schema_dir = root / 'schema' / 'mydb'
+            schema_dir.mkdir(parents=True, exist_ok=True)
+            (schema_dir / 'orders.yaml').write_text(
+                '\n'.join(
+                    [
+                        'table: orders',
+                        'columns:',
+                        '  - name: amazon_order_id',
+                        '    type: VARCHAR(50)',
+                        '    primary_key: true',
+                        '    nullable: false',
+                        '  - name: amazon_order_item_code',
+                        '    type: VARCHAR(50)',
+                        '    primary_key: true',
+                        '    nullable: false',
+                    ]
+                ),
+                encoding='utf-8',
+            )
+            desired = load_schema_definitions(connection='mydb', root_dir=root / 'schema')
+            actual = [
+                ActualTable(
+                    table='orders',
+                    columns=[
+                        ActualColumn(
+                            name='amazon_order_id',
+                            type='VARCHAR(50)',
+                            nullable=False,
+                            default=None,
+                            comment=None,
+                            primary_key=True,
+                        ),
+                        ActualColumn(
+                            name='amazon_order_item_code',
+                            type='VARCHAR(50)',
+                            nullable=False,
+                            default=None,
+                            comment=None,
+                            primary_key=False,
+                        ),
+                    ],
+                    indexes=[],
+                    primary_key_columns=['amazon_order_id'],
+                    primary_key_name='orders_pkey',
+                )
+            ]
+            plan = generate_plan('mydb', desired, actual, PostgreSQLDialect())
+            actions = [a.action for a in plan.actions]
+            self.assertIn('DROP_PRIMARY_KEY', actions)
+            self.assertIn('ADD_PRIMARY_KEY', actions)
+            self.assertTrue(
+                any(
+                    'DROP CONSTRAINT "orders_pkey"' in a.ddl
+                    for a in plan.actions
+                    if a.action == 'DROP_PRIMARY_KEY'
+                )
+            )
+            self.assertTrue(
+                any(
+                    'PRIMARY KEY ("amazon_order_id", "amazon_order_item_code")' in a.ddl
+                    for a in plan.actions
+                    if a.action == 'ADD_PRIMARY_KEY'
+                )
+            )
+
+    def test_diff_primary_key_implies_not_null(self):
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            schema_dir = root / 'schema' / 'mydb'
+            schema_dir.mkdir(parents=True, exist_ok=True)
+            (schema_dir / 'orders.yaml').write_text(
+                '\n'.join(
+                    [
+                        'table: orders',
+                        'columns:',
+                        '  - name: id',
+                        '    type: BIGINT',
+                        '    primary_key: true',
+                    ]
+                ),
+                encoding='utf-8',
+            )
+            desired = load_schema_definitions(connection='mydb', root_dir=root / 'schema')
+            actual = [
+                ActualTable(
+                    table='orders',
+                    columns=[
+                        ActualColumn(
+                            name='id',
+                            type='BIGINT',
+                            nullable=True,
+                            default=None,
+                            comment=None,
+                            primary_key=False,
+                        )
+                    ],
+                    indexes=[],
+                )
+            ]
+            plan = generate_plan('mydb', desired, actual, MySQLDialect())
+            self.assertTrue(
+                any(
+                    a.action == 'ALTER_COLUMN_NULLABLE' and a.column == 'id' and 'NOT NULL' in a.ddl
+                    for a in plan.actions
+                )
+            )
+            self.assertTrue(any(a.action == 'ADD_PRIMARY_KEY' for a in plan.actions))
 
 
 if __name__ == '__main__':
