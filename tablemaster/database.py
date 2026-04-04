@@ -409,7 +409,7 @@ class ManageTable:
                             VALUES ({value_placeholders})
                             """
 
-                        data = chunk.where(pd.notna(chunk), None).to_dict(orient='records')
+                        data = chunk.astype(object).where(pd.notna(chunk), None).to_dict(orient='records')
                         connection.execute(text(insert_sql), data)
                         pbar.update(1)
                     except Exception as e:

@@ -192,7 +192,7 @@ def fs_write_df(sheet_address, df, feishu_cfg, loc='A1', clear_sheet=True):
         df_copy[col] = df_copy[col].astype(str)
     
     # 处理 NaN 值，转换为空字符串
-    df_copy = df_copy.fillna('')
+    df_copy = df_copy.astype(object).fillna('')
     
     # 替换 'nan' 字符串为空字符串
     df_copy = df_copy.replace('nan', '')
@@ -365,7 +365,7 @@ def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
     
     # 处理 DataFrame - 只保留有效字段
     df_copy = df[list(valid_fields)].copy()
-    df_copy = df_copy.fillna('')
+    df_copy = df_copy.astype(object).fillna('')
     df_copy = df_copy.replace('nan', '')
     
     # 将 DataFrame 转换为 records 格式
