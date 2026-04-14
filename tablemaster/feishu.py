@@ -10,12 +10,53 @@ logger = logging.getLogger(__name__)
 _TOKEN_CACHE = {}
 
 
+def _normalize_url(url):
+    normalized = url.strip()
+    if '`' in normalized:
+        logger.warning('url contains backticks, auto sanitize')
+        normalized = normalized.replace('`', '').strip()
+    return normalized
+
+
+def _parse_json_response(response, context):
+    if response.status_code >= 400:
+        body_preview = response.text[:500].replace('\n', ' ')
+        raise requests.HTTPError(
+            f'{context} failed with status={response.status_code}, body={body_preview}',
+            response=response
+        )
+
+    content_type = response.headers.get('Content-Type', '')
+    if 'application/json' not in content_type.lower():
+        body_preview = response.text[:500].replace('\n', ' ')
+        raise ValueError(
+            f'{context} expected JSON but got Content-Type={content_type}, body={body_preview}'
+        )
+
+    try:
+        return response.json()
+    except ValueError as exc:
+        body_preview = response.text[:500].replace('\n', ' ')
+        raise ValueError(f'{context} invalid JSON response, body={body_preview}') from exc
+
+
+def _ensure_feishu_success(body, context):
+    if not isinstance(body, dict):
+        raise ValueError(f'{context} expected dict JSON body')
+    code = body.get('code')
+    if code != 0:
+        msg = body.get('msg', 'Unknown error')
+        raise RuntimeError(f'{context} failed with code={code}, msg={msg}')
+    return body
+
+
 def _request_with_retry(method, url, headers=None, params=None, json_data=None, data=None, timeout=30):
     max_retries = 3
+    normalized_url = _normalize_url(url)
     for attempt in range(max_retries):
         response = requests.request(
             method=method,
-            url=url,
+            url=normalized_url,
             headers=headers,
             params=params,
             json=json_data,
@@ -45,8 +86,11 @@ def _get_tenant_access_token(feishu_cfg):
         "app_secret": feishu_cfg.feishu_app_secret
     }
     r = _request_with_retry("post", feishu_url, json_data=post_data)
-    body = r.json()
-    token = body["tenant_access_token"]
+    body = _parse_json_response(r, 'get tenant access token')
+    _ensure_feishu_success(body, 'get tenant access token')
+    token = body.get("tenant_access_token")
+    if not token:
+        raise KeyError('tenant_access_token is missing in auth response')
     expire_seconds = int(body.get('expire', 7200))
     _TOKEN_CACHE[cache_key] = {
         'token': token,
@@ -91,7 +135,17 @@ def fs_read_df(sheet_address, feishu_cfg):
         + "?valueRenderOption=ToString&dateTimeRenderOption=FormattedString"
     )
     r = _request_with_retry("get", url, headers=header)
-    pull_data = r.json()['data']['valueRange']['values']
+    body = _parse_json_response(r, 'read sheets values')
+    _ensure_feishu_success(body, 'read sheets values')
+
+    pull_data = body.get('data', {}).get('valueRange', {}).get('values')
+    if not pull_data:
+        logger.info('sheet is empty: %s', sheet_address)
+        return pd.DataFrame()
+    if not isinstance(pull_data, list):
+        raise ValueError('unexpected sheets values structure: values is not a list')
+    if not pull_data[0]:
+        return pd.DataFrame(pull_data[1:] if len(pull_data) > 1 else [])
     return pd.DataFrame(pull_data[1:], columns=pull_data[0])
 
 
@@ -127,7 +181,9 @@ def fs_read_base(sheet_address, feishu_cfg):
             query_params += f"&page_token={page_token}"
 
         r = _request_with_retry("get", base_url + query_params, headers=header)
-        data = r.json().get('data', {})
+        body = _parse_json_response(r, 'read bitable records')
+        _ensure_feishu_success(body, 'read bitable records')
+        data = body.get('data', {})
         pull_data.extend(data.get('items', []))
         has_more = data.get('has_more', False)
         page_token = data.get('page_token')
@@ -263,13 +319,10 @@ def _get_bitable_fields(app_token, table_id, header):
     """
     url = f"https://open.feishu.cn/open-apis/bitable/v1/apps/{app_token}/tables/{table_id}/fields"
     r = _request_with_retry("get", url, headers=header)
-    
-    if r.status_code == 200 and r.json().get('code') == 0:
-        items = r.json().get('data', {}).get('items', [])
-        return {item['field_name'] for item in items}
-    else:
-        logger.warning("failed to get fields: %s", r.json().get('msg', 'Unknown error'))
-        return set()
+    body = _parse_json_response(r, 'get bitable fields')
+    _ensure_feishu_success(body, 'get bitable fields')
+    items = body.get('data', {}).get('items', [])
+    return {item['field_name'] for item in items}
 
 def fs_write_base(sheet_address, df, feishu_cfg, clear_table=False):
     """
