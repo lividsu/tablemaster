@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "tablemaster"
-version = "2.1.6"
+version = "2.1.7"
 description = "tablemaster is a Python toolkit for moving and managing tabular data across databases, Feishu/Lark, Google Sheets, and local files with one consistent API."
 readme = "README.md"
 requires-python = ">=3.9"

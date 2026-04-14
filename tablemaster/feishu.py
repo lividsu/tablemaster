@@ -226,15 +226,38 @@ def fs_write_df(sheet_address, df, feishu_cfg, loc='A1', clear_sheet=True):
     
     # 清空工作表（如果需要）
     if clear_sheet:
-        logger.info('clearing sheet by values_batch_clear api')
+        logger.info('clearing sheet before writing')
         try:
-            clear_url = f"https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values_batch_clear"
             clear_data = {"ranges": [f"{sheet_id}!A1:XFD1048576"]}
-            clear_resp = _request_with_retry("post", clear_url, headers=header, json_data=clear_data)
-            if clear_resp.json().get('code') == 0:
-                logger.info('sheet cleared')
-            else:
-                raise RuntimeError(f"failed to clear sheet: {clear_resp.json().get('msg')}")
+            clear_urls = [
+                f"https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values_batch_clear",
+                f"https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values/batch_clear",
+                f"https://open.feishu.cn/open-apis/sheets/v2/spreadsheets/{spreadsheet_token}/values_batch_clear/",
+            ]
+            clear_ok = False
+            last_error = None
+
+            for clear_url in clear_urls:
+                clear_resp = _request_with_retry("post", clear_url, headers=header, json_data=clear_data)
+                if clear_resp.status_code == 404:
+                    last_error = requests.HTTPError(
+                        f'clear sheet endpoint not found: {clear_url}',
+                        response=clear_resp
+                    )
+                    logger.warning('clear endpoint 404, try next: %s', clear_url)
+                    continue
+                clear_body = _parse_json_response(clear_resp, f'clear sheet ({clear_url})')
+                _ensure_feishu_success(clear_body, f'clear sheet ({clear_url})')
+                clear_ok = True
+                logger.info('sheet cleared by endpoint: %s', clear_url)
+                break
+
+            if not clear_ok:
+                logger.warning(
+                    'skip clear sheet because all clear endpoints returned 404; '
+                    'writing will continue and old trailing cells may remain. last_error=%s',
+                    last_error
+                )
         except Exception as e:
             logger.exception('failed to clear sheet: %s', e)
             raise
@@ -296,14 +319,9 @@ def fs_write_df(sheet_address, df, feishu_cfg, loc='A1', clear_sheet=True):
     
     try:
         r = _request_with_retry("put", url, headers=header, json_data=post_data)
-        response = r.json()
-        
-        if response.get('code') == 0:
-            logger.info('data is written')
-        else:
-            logger.error('failed to write data: %s', response.get('msg', 'Unknown error'))
-            logger.error('error code: %s', response.get('code'))
-        
+        response = _parse_json_response(r, 'write sheets values')
+        _ensure_feishu_success(response, 'write sheets values')
+        logger.info('data is written')
         return response
         
     except Exception as e:
