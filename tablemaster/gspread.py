@@ -1,8 +1,12 @@
 import gspread
+import json
+import math
 import pandas as pd
+import numpy as np
 import re
 import warnings
 import logging
+from datetime import date, datetime, time
 from functools import lru_cache
 
 logger = logging.getLogger(__name__)
@@ -17,6 +21,85 @@ def _is_cell_loc(value):
 
 def _warn_deprecated(message):
     warnings.warn(f'{message} This usage will be removed in a future release.', FutureWarning, stacklevel=3)
+
+
+def _json_safe(value):
+    if value is None or value is pd.NA or value is pd.NaT:
+        return None
+
+    if isinstance(value, pd.Timestamp):
+        return None if pd.isna(value) else value.isoformat()
+    if isinstance(value, pd.Timedelta):
+        return None if pd.isna(value) else str(value)
+    if isinstance(value, np.datetime64):
+        return None if np.isnat(value) else pd.Timestamp(value).isoformat()
+    if isinstance(value, np.timedelta64):
+        try:
+            if np.isnat(value):
+                return None
+        except TypeError:
+            pass
+        return str(pd.Timedelta(value))
+    if isinstance(value, (datetime, date, time)):
+        return value.isoformat()
+
+    if isinstance(value, (float, np.floating)):
+        if np.isnan(value) or np.isinf(value):
+            return None
+        return float(value)
+    if isinstance(value, np.integer):
+        return int(value)
+    if isinstance(value, np.bool_):
+        return bool(value)
+
+    if isinstance(value, dict):
+        return {k: _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple, set)):
+        return [_json_safe(v) for v in value]
+    if isinstance(value, np.ndarray):
+        return [_json_safe(v) for v in value.tolist()]
+
+    try:
+        if math.isnan(value) or math.isinf(value):
+            return None
+    except Exception:
+        pass
+
+    return value
+
+
+def _build_values(df):
+    safe_cols = [_json_safe(col) for col in df.columns.tolist()]
+    safe_cols = [("" if col is None else col) for col in safe_cols]
+    for col_index, col_value in enumerate(safe_cols, start=1):
+        try:
+            json.dumps(col_value, allow_nan=False)
+        except (TypeError, ValueError) as exc:
+            raise ValueError(f'column header at col {col_index} is not JSON serializable: {exc}') from exc
+
+    rows = df.values.tolist()
+    safe_rows = []
+    for row_index, row in enumerate(rows, start=2):
+        safe_row = []
+        for col_index, cell in enumerate(row, start=1):
+            safe_cell = _json_safe(cell)
+            safe_cell = '' if safe_cell is None else safe_cell
+            try:
+                json.dumps(safe_cell, allow_nan=False)
+            except (TypeError, ValueError) as exc:
+                column_name = str(df.columns[col_index - 1])
+                raise ValueError(
+                    f'cell at row {row_index}, col {col_index} ({column_name}) is not JSON serializable: {exc}'
+                ) from exc
+            safe_row.append(safe_cell)
+        safe_rows.append(safe_row)
+
+    values = [safe_cols] + safe_rows
+    try:
+        json.dumps({'values': values}, allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f'worksheet payload contains non-JSON-safe data: {exc}') from exc
+    return values
 
 
 def _resolve_service_account_path(cfg, service_account_path):
@@ -123,10 +206,8 @@ def gs_write_df(address, df, cfg=None, loc='A1', service_account_path=None):
     try:
         wks.clear()
         df_copy = df.copy()
-        non_float_int_columns = df_copy.select_dtypes(exclude=['float64', 'int64']).columns
-        for col in non_float_int_columns:
-            df_copy[col] = df_copy[col].astype(str)
-        wks.update(loc, ([df_copy.columns.values.tolist()] + df_copy.values.tolist()))
+        values = _build_values(df_copy)
+        wks.update(loc, values)
 
         logger.info('data is written')
     except Exception as e:
