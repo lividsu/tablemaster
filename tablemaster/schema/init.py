@@ -15,6 +15,10 @@ _CFG_TEMPLATE = """mydb:
   db_type: mysql
 """
 
+_IGNORE_TABLES_TEMPLATE = """# Tables listed here are ignored by schema plan/apply compare.
+tables: []
+"""
+
 
 def _is_db_entry(value) -> bool:
     return isinstance(value, dict) and 'host' in value and 'database' in value
@@ -67,6 +71,10 @@ def init_scaffold(
         if not keep_file.exists():
             keep_file.write_text('', encoding='utf-8')
             created_paths.append(str(keep_file))
+        ignore_file = conn_dir / '_ignore_tables.yaml'
+        if not ignore_file.exists():
+            ignore_file.write_text(_IGNORE_TABLES_TEMPLATE, encoding='utf-8')
+            created_paths.append(str(ignore_file))
 
     return {
         'cfg_path': str(cfg_file),

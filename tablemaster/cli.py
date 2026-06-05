@@ -43,9 +43,10 @@ def _build_plan(
     from .schema.dialects import get_dialect
     from .schema.diff import generate_plan
     from .schema.introspect import introspect_tables
-    from .schema.loader import load_schema_definitions
+    from .schema.loader import load_ignored_tables, load_schema_definitions
 
     db_cfg = _load_named_cfg(cfg_path, connection)
+    ignored_tables = load_ignored_tables(connection=connection, root_dir=schema_dir)
     desired = load_schema_definitions(connection=connection, root_dir=schema_dir, table=table)
     actual = introspect_tables(
         db_cfg,
@@ -53,7 +54,13 @@ def _build_plan(
         schema_name=getattr(desired[0], 'schema_name', None) if desired else None,
     )
     dialect = get_dialect(getattr(db_cfg, 'db_type', 'mysql'))
-    plan = generate_plan(connection_name=connection, desired=desired, actual=actual, dialect=dialect)
+    plan = generate_plan(
+        connection_name=connection,
+        desired=desired,
+        actual=actual,
+        dialect=dialect,
+        ignored_tables=ignored_tables,
+    )
     return db_cfg, plan
 
 

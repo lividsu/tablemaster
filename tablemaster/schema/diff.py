@@ -1,12 +1,33 @@
 from __future__ import annotations
 
+import re
+
 from .dialects.base import BaseDialect
 from .models import ActualTable, ColumnDef, Plan, PlanAction, TableDef
 
 
-def _norm_default(value: str | None) -> str | None:
+def _strip_outer_parens(value: str) -> str:
+    result = value.strip()
+    while result.startswith('(') and result.endswith(')'):
+        result = result[1:-1].strip()
+    return result
+
+
+def _normalize_pg_default(value: str) -> str:
+    normalized = _strip_outer_parens(value)
+    # PostgreSQL introspection often returns defaults like: 'N'::bpchar
+    # or ('unknown'::character varying). Strip trailing casts for comparison.
+    normalized = re.sub(r"::[a-zA-Z_][a-zA-Z0-9_\[\]\.\s]*$", '', normalized).strip()
+    if normalized.startswith("'") and normalized.endswith("'") and len(normalized) >= 2:
+        normalized = normalized[1:-1].replace("''", "'")
+    return normalized.upper()
+
+
+def _norm_default(value: str | None, dialect: BaseDialect) -> str | None:
     if value is None:
         return None
+    if dialect.__class__.__name__ == 'PostgreSQLDialect':
+        return _normalize_pg_default(value)
     return value.strip().strip("'").upper()
 
 
@@ -37,10 +58,12 @@ def generate_plan(
     desired: list[TableDef],
     actual: list[ActualTable],
     dialect: BaseDialect,
+    ignored_tables: set[str] | None = None,
 ) -> Plan:
     plan = Plan(connection=connection_name)
-    desired_map = {t.table: t for t in desired}
-    actual_map = {t.table: t for t in actual}
+    ignored = set(ignored_tables or [])
+    desired_map = {t.table: t for t in desired if t.table not in ignored}
+    actual_map = {t.table: t for t in actual if t.table not in ignored}
 
     for table_name, table_def in desired_map.items():
         current = actual_map.get(table_name)
@@ -161,7 +184,7 @@ def generate_plan(
                     )
                 )
 
-            if _norm_default(desired_col.default) != _norm_default(actual_col.default):
+            if _norm_default(desired_col.default, dialect) != _norm_default(actual_col.default, dialect):
                 plan.actions.append(
                     _action(
                         'ALTER_COLUMN_DEFAULT',

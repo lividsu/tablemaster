@@ -2,7 +2,7 @@ from .apply import ApplyResult, apply_plan
 from .diff import generate_plan
 from .init import init_scaffold
 from .introspect import introspect_tables
-from .loader import load_schema_definitions
+from .loader import load_ignored_tables, load_schema_definitions
 from .models import (
     ActualColumn,
     ActualTable,
@@ -25,6 +25,7 @@ __all__ = [
     'Plan',
     'ApplyResult',
     'load_schema_definitions',
+    'load_ignored_tables',
     'introspect_tables',
     'generate_plan',
     'render_plan',

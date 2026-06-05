@@ -5,12 +5,23 @@ import unittest
 from tablemaster.schema.dialects.mysql import MySQLDialect
 from tablemaster.schema.dialects.postgresql import PostgreSQLDialect
 from tablemaster.schema.diff import generate_plan
-from tablemaster.schema.loader import load_schema_definitions
+from tablemaster.schema.init import init_scaffold
+from tablemaster.schema.loader import load_ignored_tables, load_schema_definitions
 from tablemaster.schema.models import ActualColumn, ActualTable
 from tablemaster.schema.pull import write_pulled_schema
 
 
 class SchemaCoreTests(unittest.TestCase):
+    def test_init_creates_ignore_tables_template(self):
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            result = init_scaffold(base_dir=root)
+            ignore_path = root / 'schema' / 'mydb' / '_ignore_tables.yaml'
+            self.assertTrue(ignore_path.exists())
+            content = ignore_path.read_text(encoding='utf-8')
+            self.assertIn('tables: []', content)
+            self.assertIn(str(ignore_path), result['created_paths'])
+
     def test_loader_reads_yaml(self):
         with TemporaryDirectory() as td:
             root = Path(td)
@@ -33,6 +44,40 @@ class SchemaCoreTests(unittest.TestCase):
             self.assertEqual(1, len(tables))
             self.assertEqual('orders', tables[0].table)
             self.assertEqual('id', tables[0].columns[0].name)
+
+    def test_loader_reads_ignored_tables_file(self):
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            schema_dir = root / 'schema' / 'mydb'
+            schema_dir.mkdir(parents=True, exist_ok=True)
+            (schema_dir / '_ignore_tables.yaml').write_text(
+                '\n'.join(
+                    [
+                        'tables:',
+                        '  - orders',
+                        '  - legacy_users',
+                    ]
+                ),
+                encoding='utf-8',
+            )
+            (schema_dir / 'orders.yaml').write_text(
+                '\n'.join(
+                    [
+                        'table: orders',
+                        'columns:',
+                        '  - name: id',
+                        '    type: BIGINT',
+                        '    primary_key: true',
+                        '    nullable: false',
+                    ]
+                ),
+                encoding='utf-8',
+            )
+            ignored = load_ignored_tables(connection='mydb', root_dir=root / 'schema')
+            tables = load_schema_definitions(connection='mydb', root_dir=root / 'schema')
+            self.assertEqual({'orders', 'legacy_users'}, ignored)
+            self.assertEqual(1, len(tables))
+            self.assertEqual('orders', tables[0].table)
 
     def test_diff_emits_add_column_and_warning(self):
         with TemporaryDirectory() as td:
@@ -243,6 +288,97 @@ class SchemaCoreTests(unittest.TestCase):
                 )
             )
             self.assertTrue(any(a.action == 'ADD_PRIMARY_KEY' for a in plan.actions))
+
+    def test_postgresql_default_literal_with_cast_not_repeated(self):
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            schema_dir = root / 'schema' / 'mydb'
+            schema_dir.mkdir(parents=True, exist_ok=True)
+            (schema_dir / 'orders.yaml').write_text(
+                '\n'.join(
+                    [
+                        'table: orders',
+                        'columns:',
+                        '  - name: archive',
+                        '    type: CHAR(1)',
+                        '    nullable: false',
+                        '    default: "\'N\'"',
+                    ]
+                ),
+                encoding='utf-8',
+            )
+            desired = load_schema_definitions(connection='mydb', root_dir=root / 'schema')
+            actual = [
+                ActualTable(
+                    table='orders',
+                    columns=[
+                        ActualColumn(
+                            name='archive',
+                            type='character(1)',
+                            nullable=False,
+                            default="'N'::bpchar",
+                            comment=None,
+                        )
+                    ],
+                    indexes=[],
+                )
+            ]
+            plan = generate_plan('mydb', desired, actual, PostgreSQLDialect())
+            self.assertFalse(any(a.action == 'ALTER_COLUMN_DEFAULT' for a in plan.actions))
+
+    def test_diff_ignored_table_has_no_actions_or_warnings(self):
+        with TemporaryDirectory() as td:
+            root = Path(td)
+            schema_dir = root / 'schema' / 'mydb'
+            schema_dir.mkdir(parents=True, exist_ok=True)
+            (schema_dir / '_ignore_tables.yaml').write_text(
+                '\n'.join(
+                    [
+                        'tables:',
+                        '  - orders',
+                    ]
+                ),
+                encoding='utf-8',
+            )
+            (schema_dir / 'orders.yaml').write_text(
+                '\n'.join(
+                    [
+                        'table: orders',
+                        'columns:',
+                        '  - name: id',
+                        '    type: BIGINT',
+                        '    nullable: false',
+                    ]
+                ),
+                encoding='utf-8',
+            )
+            desired = load_schema_definitions(connection='mydb', root_dir=root / 'schema')
+            ignored = load_ignored_tables(connection='mydb', root_dir=root / 'schema')
+            actual = [
+                ActualTable(
+                    table='orders',
+                    columns=[
+                        ActualColumn(
+                            name='id',
+                            type='BIGINT',
+                            nullable=True,
+                            default=None,
+                            comment=None,
+                        ),
+                        ActualColumn(
+                            name='legacy_col',
+                            type='VARCHAR(32)',
+                            nullable=True,
+                            default=None,
+                            comment=None,
+                        ),
+                    ],
+                    indexes=[],
+                )
+            ]
+            plan = generate_plan('mydb', desired, actual, MySQLDialect(), ignored_tables=ignored)
+            self.assertEqual([], plan.actions)
+            self.assertEqual([], plan.warnings)
 
 
 if __name__ == '__main__':

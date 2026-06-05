@@ -185,6 +185,8 @@ tablemaster schema apply mydb --cfg-path ./cfg.yaml
 tablemaster schema pull mydb --cfg-path ./cfg.yaml
 ```
 
+After `tablemaster init`, each `schema/<connection>/` directory includes `_ignore_tables.yaml` by default.
+
 Example schema file:
 
 ```yaml
@@ -202,6 +204,16 @@ indexes:
     columns: [order_no]
     unique: true
 ```
+
+Ignore specific tables from schema diff by editing `_ignore_tables.yaml` (or `_ignore_tables.yml`) under `schema/<connection>/`:
+
+```yaml
+tables:
+  - ods_orders_archive
+  - tmp_legacy_users
+```
+
+Tables listed in this file are excluded from schema comparison, so they do not produce `plan` actions or warnings.
 
 ## CLI
 
@@ -236,7 +248,7 @@ CLI command groups:
 - `db query <sql>`: Run SQL with `--cfg-key`; use `--limit` to control stdout preview and `--output` to export full result as CSV.
 - `local read <pattern>`: Read one local CSV/Excel match and print preview; use `--det-header/--no-det-header` to control header detection.
 - `config list`: List top-level keys from config.
-- `init`: Bootstrap `cfg.yaml` and `schema/<connection>/` scaffold in current directory.
+- `init`: Bootstrap `cfg.yaml`, `schema/<connection>/`, and `_ignore_tables.yaml` scaffold in current directory.
 - `schema plan <connection>`: Compare YAML schema and live DB, print/apply-safe plan.
 - `schema apply <connection>`: Execute DDL actions from generated or saved plan.
 - `schema pull <connection>`: Generate YAML schema files from live DB tables.

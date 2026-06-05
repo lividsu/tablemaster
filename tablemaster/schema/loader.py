@@ -7,6 +7,8 @@ import yaml
 
 from .models import ColumnDef, IndexDef, TableDef
 
+IGNORE_TABLES_FILENAMES = {'_ignore_tables.yaml', '_ignore_tables.yml'}
+
 
 def _coerce_default(value) -> Optional[str]:
     if value is None:
@@ -61,6 +63,43 @@ def parse_table_file(path: Path) -> TableDef:
     )
 
 
+def _is_ignore_tables_file(path: Path) -> bool:
+    return path.name.lower() in IGNORE_TABLES_FILENAMES
+
+
+def _parse_ignore_tables_file(path: Path) -> set[str]:
+    with path.open('r', encoding='utf-8') as f:
+        raw = yaml.safe_load(f) or {}
+
+    if isinstance(raw, dict):
+        tables = raw.get('tables', raw.get('ignore_tables', []))
+    elif isinstance(raw, list):
+        tables = raw
+    else:
+        raise ValueError(f'Ignore tables file root must be list/dict: {path}')
+
+    if not isinstance(tables, list):
+        raise ValueError(f'Ignore tables must be a list: {path}')
+    return {str(t).strip() for t in tables if str(t).strip()}
+
+
+def load_ignored_tables(
+    connection: str,
+    root_dir: str | Path = 'schema',
+) -> set[str]:
+    root = Path(root_dir).resolve()
+    conn_dir = root / connection
+    if not conn_dir.exists() or not conn_dir.is_dir():
+        raise FileNotFoundError(f'Schema directory not found: {conn_dir}')
+
+    files = sorted(conn_dir.rglob('*.yaml')) + sorted(conn_dir.rglob('*.yml'))
+    ignored: set[str] = set()
+    for file in files:
+        if _is_ignore_tables_file(file):
+            ignored.update(_parse_ignore_tables_file(file))
+    return ignored
+
+
 def load_schema_definitions(
     connection: str,
     root_dir: str | Path = 'schema',
@@ -71,12 +110,15 @@ def load_schema_definitions(
     if not conn_dir.exists() or not conn_dir.is_dir():
         raise FileNotFoundError(f'Schema directory not found: {conn_dir}')
     files = sorted(conn_dir.rglob('*.yaml')) + sorted(conn_dir.rglob('*.yml'))
+    ignore_tables = load_ignored_tables(connection=connection, root_dir=root_dir)
     defs: list[TableDef] = []
     for file in files:
+        if _is_ignore_tables_file(file):
+            continue
         parsed = parse_table_file(file)
         if table and parsed.table != table:
             continue
         defs.append(parsed)
-    if table and not defs:
+    if table and not defs and table not in ignore_tables:
         raise FileNotFoundError(f'Table schema not found under {conn_dir}: {table}')
     return defs
