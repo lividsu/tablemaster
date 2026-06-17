@@ -130,6 +130,19 @@ def _safe_identifier(identifier: str) -> str:
     return identifier
 
 
+def _safe_postgresql_table(table: str) -> str:
+    return '.'.join(_safe_identifier(part.strip()) for part in table.split('.'))
+
+
+def _execute_postgresql_values(connection: Any, sql: str, rows: List[Tuple[Any, ...]], page_size: int) -> None:
+    from psycopg2.extras import execute_values
+
+    proxied_connection = connection.connection
+    dbapi_connection = getattr(proxied_connection, 'driver_connection', proxied_connection)
+    with dbapi_connection.cursor() as cursor:
+        execute_values(cursor, sql, rows, page_size=page_size)
+
+
 def _safe_mysql_type(data_type: str) -> str:
     """
     Ensure a MySQL data type expression is safe from SQL injection.
@@ -383,6 +396,7 @@ class ManageTable:
                                     
                                 safe_keys = [_safe_identifier(k) for k in keys]
                                 safe_columns = [_safe_identifier(col) for col in columns]
+                                safe_table = _safe_postgresql_table(self.table)
                                 quoted_columns = ', '.join([f'"{col}"' for col in safe_columns])
                                 update_columns = ', '.join(
                                     [f'"{col}"=EXCLUDED."{col}"' for col in safe_columns if col not in safe_keys]
@@ -391,23 +405,45 @@ class ManageTable:
                                 
                                 if update_columns:
                                     insert_sql = f"""
-                                    INSERT INTO {self.table} ({quoted_columns})
-                                    VALUES ({value_placeholders})
+                                    INSERT INTO {safe_table} ({quoted_columns})
+                                    VALUES %s
                                     ON CONFLICT ({conflict_keys_str}) DO UPDATE SET {update_columns}
                                     """
                                 else:
                                     insert_sql = f"""
-                                    INSERT INTO {self.table} ({quoted_columns})
-                                    VALUES ({value_placeholders})
+                                    INSERT INTO {safe_table} ({quoted_columns})
+                                    VALUES %s
                                     ON CONFLICT ({conflict_keys_str}) DO NOTHING
                                     """
+                                data_frame = chunk.astype(object).where(pd.notna(chunk), None)
+                                data = [tuple(row) for row in data_frame.itertuples(index=False, name=None)]
+                                _execute_postgresql_values(connection, insert_sql, data, page_size=chunk_size)
+                                pbar.update(1)
+                                continue
                             else:
                                 raise ValueError(f'Unsupported db_type for upsert: {db_type}')
                         else:
-                            insert_sql = f"""
-                            INSERT IGNORE INTO {self.table} ({', '.join([f'`{col}`' for col in columns])})
-                            VALUES ({value_placeholders})
-                            """
+                            if db_type in ('mysql', 'tidb'):
+                                insert_sql = f"""
+                                INSERT IGNORE INTO {self.table} ({', '.join([f'`{col}`' for col in columns])})
+                                VALUES ({value_placeholders})
+                                """
+                            elif db_type == 'postgresql':
+                                safe_columns = [_safe_identifier(col) for col in columns]
+                                safe_table = _safe_postgresql_table(self.table)
+                                quoted_columns = ', '.join([f'"{col}"' for col in safe_columns])
+                                insert_sql = f"""
+                                INSERT INTO {safe_table} ({quoted_columns})
+                                VALUES %s
+                                ON CONFLICT DO NOTHING
+                                """
+                                data_frame = chunk.astype(object).where(pd.notna(chunk), None)
+                                data = [tuple(row) for row in data_frame.itertuples(index=False, name=None)]
+                                _execute_postgresql_values(connection, insert_sql, data, page_size=chunk_size)
+                                pbar.update(1)
+                                continue
+                            else:
+                                raise ValueError(f'Unsupported db_type for upsert: {db_type}')
 
                         data = chunk.astype(object).where(pd.notna(chunk), None).to_dict(orient='records')
                         connection.execute(text(insert_sql), data)

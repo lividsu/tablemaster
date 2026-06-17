@@ -2,6 +2,9 @@
 .DS_Store
 **/.DS_Store
 
+# Local secrets
+.env
+
 # Distribution / packaging
 .Python
 build/
