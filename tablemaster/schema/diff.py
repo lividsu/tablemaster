@@ -150,7 +150,41 @@ def generate_plan(
 
             desired_type = _mapped_desired_type(dialect, desired_col)
             actual_type = dialect.normalize_type(actual_col.type)
-            if desired_type != actual_type:
+            type_changed = desired_type != actual_type
+            desired_nullable = bool(desired_col.nullable) and not bool(desired_col.primary_key)
+            nullable_changed = desired_nullable != bool(actual_col.nullable)
+            default_changed = (
+                _norm_default(desired_col.default, dialect)
+                != _norm_default(actual_col.default, dialect)
+            )
+            desired_comment = (desired_col.comment or '').strip()
+            actual_comment = (actual_col.comment or '').strip()
+            comment_changed = desired_comment != actual_comment
+
+            if dialect.requires_full_column_definition and any(
+                (type_changed, nullable_changed, default_changed, comment_changed)
+            ):
+                plan.actions.append(
+                    _action(
+                        'ALTER_COLUMN',
+                        table_name,
+                        column=col_name,
+                        ddl=dialect.gen_alter_column_definition(
+                            table_name,
+                            desired_col,
+                            schema_name=table_def.schema_name,
+                        ),
+                        detail={
+                            'type': {'old': actual_col.type, 'new': desired_col.type},
+                            'nullable': {'old': actual_col.nullable, 'new': desired_nullable},
+                            'default': {'old': actual_col.default, 'new': desired_col.default},
+                            'comment': {'old': actual_col.comment, 'new': desired_col.comment},
+                        },
+                    )
+                )
+                continue
+
+            if type_changed:
                 plan.actions.append(
                     _action(
                         'ALTER_COLUMN_TYPE',
@@ -166,8 +200,7 @@ def generate_plan(
                     )
                 )
 
-            desired_nullable = bool(desired_col.nullable) and not bool(desired_col.primary_key)
-            if desired_nullable != bool(actual_col.nullable):
+            if nullable_changed:
                 plan.actions.append(
                     _action(
                         'ALTER_COLUMN_NULLABLE',
@@ -184,7 +217,7 @@ def generate_plan(
                     )
                 )
 
-            if _norm_default(desired_col.default, dialect) != _norm_default(actual_col.default, dialect):
+            if default_changed:
                 plan.actions.append(
                     _action(
                         'ALTER_COLUMN_DEFAULT',
@@ -200,9 +233,7 @@ def generate_plan(
                     )
                 )
 
-            desired_comment = (desired_col.comment or '').strip()
-            actual_comment = (actual_col.comment or '').strip()
-            if desired_comment != actual_comment:
+            if comment_changed:
                 plan.actions.append(
                     _action(
                         'ALTER_COLUMN_COMMENT',

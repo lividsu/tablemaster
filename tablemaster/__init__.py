@@ -17,7 +17,15 @@ def __getattr__(name: str):
         ('fs_read_df', 'fs_read_base', 'fs_write_df', 'fs_write_base'): 'feishu',
         ('gs_read_df', 'gs_write_df'): 'gspread',
         ('read', 'batch_read', 'read_dfs'): 'local',
-        ('sync',): 'sync',
+        (
+            'sync',
+            'DataFrameEndpoint',
+            'FeishuEndpoint',
+            'DatabaseEndpoint',
+            'SyncError',
+            'feishu_endpoint',
+            'database_endpoint',
+        ): 'sync',
         ('utils',): 'utils',
         ('DBConfig', 'FeishuConfig', 'GoogleConfig', 'ConfigNamespace', 'read_cfg'): 'config',
         (

@@ -80,6 +80,8 @@ db_tidb:
   db_type: tidb
   use_ssl: true
   ssl_ca: /path/to/ca.pem
+  ssl_verify_cert: true
+  ssl_verify_identity: true
 
 db_pg:
   host: 10.0.0.2
@@ -168,13 +170,27 @@ import tablemaster as tm
 cfg = tm.load_cfg()
 feishu_sheet = ("spreadsheet_token", "sheet_id")
 
+source = tm.FeishuEndpoint(feishu_sheet, cfg.feishu_prod)
+target = tm.DatabaseEndpoint(cfg.mydb, "orders")
+
 merged = tm.sync(
-    source=("feishu", feishu_sheet, cfg.feishu_prod),
-    target=("db", cfg.mydb, "orders"),
+    source=source,
+    target=target,
     on_conflict="upsert",
     key="order_id",
+    conflict_policy="source_wins",
 )
 ```
+
+`conflict_policy` can be `source_wins`, `target_wins`, or `newest`. The
+`newest` policy also requires `updated_at="column_name"`. Sync preserves rows
+missing from either side; deletion requires an explicit tombstone workflow and
+is intentionally not inferred.
+
+Writes across database and spreadsheet systems cannot be atomic. If a later
+write fails, `SyncError` reports which endpoint was already updated and includes
+the merged DataFrame for recovery. Legacy endpoint tuples remain supported with
+a deprecation warning.
 
 ### Schema management (YAML-driven)
 
@@ -230,6 +246,7 @@ Commands:
 tablemaster version-info
 tablemaster config list --cfg-path ./cfg.yaml
 tablemaster config show mydb --cfg-path ./cfg.yaml
+tablemaster config show mydb --cfg-path ./cfg.yaml --show-secrets
 tablemaster db query "SELECT * FROM orders LIMIT 20" --cfg-key mydb --cfg-path ./cfg.yaml
 tablemaster db query "SELECT * FROM orders" --cfg-key mydb --output ./out/orders.csv
 tablemaster local read "*orders_2026*" --limit 10
@@ -244,7 +261,7 @@ CLI command groups:
 
 - `version-info`: Print installed package version.
 - <br />
-- `config show <cfg_key>`: Print one config entry as JSON.
+- `config show <cfg_key>`: Print one config entry as JSON with secrets redacted by default.
 - `db query <sql>`: Run SQL with `--cfg-key`; use `--limit` to control stdout preview and `--output` to export full result as CSV.
 - `local read <pattern>`: Read one local CSV/Excel match and print preview; use `--det-header/--no-det-header` to control header detection.
 - `config list`: List top-level keys from config.
@@ -261,13 +278,13 @@ CLI command groups:
 - Feishu/Lark: `fs_read_df`, `fs_write_df`, `fs_read_base`, `fs_write_base`
 - Google Sheets: `gs_read_df`, `gs_write_df`
 - Local files: `read`, `batch_read`, `read_dfs`
-- Sync: `sync`
+- Sync: `sync`, `FeishuEndpoint`, `DatabaseEndpoint`, `SyncError`
 - Config: `load_cfg`
 - Schema: `load_schema_definitions`, `introspect_tables`, `generate_plan`, `render_plan`, `save_plan`, `load_plan`, `apply_plan`, `init_scaffold`, `pull_schema`, `write_pulled_schema`
 
 ## Notes
 
-- Python 3.9+ is required.
+- Python 3.10+ is required.
 - CLI entrypoint is `tablemaster`; use `tablemaster --help` for command details.
 - `tm.cfg` and `read_cfg()` are backward-compatible but deprecated in favor of `load_cfg()`.
 - `tablemaster[database]` is the recommended DB extra name; `tablemaster[mysql]` remains available for compatibility.

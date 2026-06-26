@@ -15,15 +15,25 @@ local_app = typer.Typer(help='Read local files.')
 schema_app = typer.Typer(help='Manage database schema (plan/apply/pull).')
 
 
-def _to_plain(value):
+_SECRET_FIELDS = {'password', 'feishu_app_secret', 'service_account_path'}
+
+
+def _to_plain(value, *, show_secrets: bool = False):
     if is_dataclass(value):
-        return asdict(value)
+        value = asdict(value)
     if isinstance(value, dict):
-        return {k: _to_plain(v) for k, v in value.items()}
+        return {
+            k: (
+                _to_plain(v, show_secrets=show_secrets)
+                if show_secrets or k not in _SECRET_FIELDS
+                else '***'
+            )
+            for k, v in value.items()
+        }
     if isinstance(value, (list, tuple)):
-        return [_to_plain(v) for v in value]
+        return [_to_plain(v, show_secrets=show_secrets) for v in value]
     if hasattr(value, '__dict__'):
-        return {k: _to_plain(v) for k, v in vars(value).items()}
+        return _to_plain(vars(value), show_secrets=show_secrets)
     return value
 
 
@@ -106,9 +116,10 @@ def config_list(
 def config_show(
     cfg_key: str = typer.Argument(..., help='Top-level config key.'),
     cfg_path: Optional[str] = typer.Option(None, '--cfg-path', help='Config file path or directory.'),
+    show_secrets: bool = typer.Option(False, '--show-secrets', help='Print secret config values.'),
 ):
     entry = _load_named_cfg(cfg_path, cfg_key)
-    typer.echo(json.dumps(_to_plain(entry), ensure_ascii=False, indent=2))
+    typer.echo(json.dumps(_to_plain(entry, show_secrets=show_secrets), ensure_ascii=False, indent=2))
 
 
 @db_app.command('query')
@@ -176,11 +187,21 @@ def schema_apply(
     db_cfg = _load_named_cfg(cfg_path, connection)
     if plan_file:
         plan = load_plan(plan_file)
+        if plan.connection != connection:
+            raise typer.BadParameter(
+                f'Plan connection is {plan.connection!r}, not requested connection {connection!r}'
+            )
     else:
         _, plan = _build_plan(connection, cfg_path, schema_dir, table=table)
     conn_info = f"{db_cfg.db_type}@{db_cfg.host}:{db_cfg.port}/{db_cfg.database}"
     typer.echo(render_plan(plan, connection_info=conn_info))
-    result = apply_plan(plan, db_cfg, auto_approve=auto_approve)
+    result = apply_plan(
+        plan,
+        db_cfg,
+        auto_approve=auto_approve,
+        confirm=lambda message: typer.confirm(message, default=False),
+        report=typer.echo,
+    )
     typer.echo(f'Apply summary: {result.summary()}')
 
 

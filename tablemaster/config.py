@@ -1,14 +1,9 @@
 import os
 import warnings
-from dataclasses import dataclass
-from typing import Optional
+from dataclasses import dataclass, field
+from typing import Any, Optional
 
-from yaml import load
-
-try:
-    from yaml import CLoader as Loader
-except ImportError:
-    from yaml import Loader
+import yaml
 
 
 @dataclass
@@ -22,6 +17,9 @@ class DBConfig:
     db_type: str = 'mysql'
     use_ssl: bool = False
     ssl_ca: Optional[str] = None
+    ssl_verify_cert: bool = True
+    ssl_verify_identity: bool = True
+    connect_args: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
@@ -74,16 +72,25 @@ def _parse_entry(key: str, val):
         return val
 
     if 'host' in val and 'database' in val:
-        db_kwargs = {k: v for k, v in val.items() if k in DBConfig.__dataclass_fields__}
+        unknown = set(val) - set(DBConfig.__dataclass_fields__)
+        if unknown:
+            raise ValueError(f'Unknown database config fields for {key}: {", ".join(sorted(unknown))}')
+        db_kwargs = dict(val)
         db_kwargs['name'] = key
         return DBConfig(**db_kwargs)
 
     if 'feishu_app_id' in val and 'feishu_app_secret' in val:
-        fs_kwargs = {k: v for k, v in val.items() if k in FeishuConfig.__dataclass_fields__}
+        unknown = set(val) - set(FeishuConfig.__dataclass_fields__)
+        if unknown:
+            raise ValueError(f'Unknown Feishu config fields for {key}: {", ".join(sorted(unknown))}')
+        fs_kwargs = dict(val)
         return FeishuConfig(**fs_kwargs)
 
     if 'service_account_path' in val:
-        gs_kwargs = {k: v for k, v in val.items() if k in GoogleConfig.__dataclass_fields__}
+        unknown = set(val) - set(GoogleConfig.__dataclass_fields__)
+        if unknown:
+            raise ValueError(f'Unknown Google config fields for {key}: {", ".join(sorted(unknown))}')
+        gs_kwargs = dict(val)
         return GoogleConfig(**gs_kwargs)
 
     return ConfigNamespace(val)
@@ -92,7 +99,7 @@ def _parse_entry(key: str, val):
 def load_cfg(path: str = None) -> ConfigNamespace:
     cfg_path = _resolve_cfg_path(path)
     with open(cfg_path, 'r', encoding='utf-8') as f:
-        yaml_content = load(f, Loader=Loader) or {}
+        yaml_content = yaml.safe_load(f) or {}
     if not isinstance(yaml_content, dict):
         raise ValueError(f'Config root must be a dict, got: {type(yaml_content).__name__}')
     return ConfigNamespace(yaml_content)

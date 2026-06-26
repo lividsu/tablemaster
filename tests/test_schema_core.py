@@ -7,7 +7,7 @@ from tablemaster.schema.dialects.postgresql import PostgreSQLDialect
 from tablemaster.schema.diff import generate_plan
 from tablemaster.schema.init import init_scaffold
 from tablemaster.schema.loader import load_ignored_tables, load_schema_definitions
-from tablemaster.schema.models import ActualColumn, ActualTable
+from tablemaster.schema.models import ActualColumn, ActualTable, ColumnDef, TableDef
 from tablemaster.schema.pull import write_pulled_schema
 
 
@@ -283,11 +283,50 @@ class SchemaCoreTests(unittest.TestCase):
             plan = generate_plan('mydb', desired, actual, MySQLDialect())
             self.assertTrue(
                 any(
-                    a.action == 'ALTER_COLUMN_NULLABLE' and a.column == 'id' and 'NOT NULL' in a.ddl
+                    a.action == 'ALTER_COLUMN' and a.column == 'id' and 'NOT NULL' in a.ddl
                     for a in plan.actions
                 )
             )
             self.assertTrue(any(a.action == 'ADD_PRIMARY_KEY' for a in plan.actions))
+
+    def test_mysql_column_change_preserves_complete_desired_definition(self):
+        desired = [
+            TableDef(
+                table='orders',
+                columns=[
+                    ColumnDef(
+                        name='status',
+                        type='VARCHAR(20)',
+                        nullable=False,
+                        default="'new'",
+                        comment='Order status',
+                    )
+                ],
+            )
+        ]
+        actual = [
+            ActualTable(
+                table='orders',
+                columns=[
+                    ActualColumn(
+                        name='status',
+                        type='VARCHAR(10)',
+                        nullable=True,
+                        default=None,
+                        comment=None,
+                    )
+                ],
+                indexes=[],
+            )
+        ]
+        plan = generate_plan('mydb', desired, actual, MySQLDialect())
+        column_actions = [action for action in plan.actions if action.column == 'status']
+        self.assertEqual(1, len(column_actions))
+        self.assertEqual('ALTER_COLUMN', column_actions[0].action)
+        self.assertIn(
+            "`status` VARCHAR(20) NOT NULL DEFAULT 'new' COMMENT 'Order status'",
+            column_actions[0].ddl,
+        )
 
     def test_postgresql_default_literal_with_cast_not_repeated(self):
         with TemporaryDirectory() as td:

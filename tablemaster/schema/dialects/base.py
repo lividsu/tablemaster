@@ -6,6 +6,8 @@ from ..models import ActualTable, ColumnDef, IndexDef, TableDef
 
 
 class BaseDialect(ABC):
+    requires_full_column_definition = False
+
     @abstractmethod
     def map_type(self, generic_type: str) -> str:
         pass
@@ -41,6 +43,14 @@ class BaseDialect(ABC):
         schema_name: str | None = None,
     ) -> str:
         pass
+
+    def gen_alter_column_definition(
+        self,
+        table: str,
+        col: ColumnDef,
+        schema_name: str | None = None,
+    ) -> str:
+        raise NotImplementedError(f'{self.__class__.__name__} does not use full column definitions')
 
     @abstractmethod
     def gen_alter_column_nullable(

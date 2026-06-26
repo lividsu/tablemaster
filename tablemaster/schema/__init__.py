@@ -1,38 +1,38 @@
-from .apply import ApplyResult, apply_plan
-from .diff import generate_plan
-from .init import init_scaffold
-from .introspect import introspect_tables
-from .loader import load_ignored_tables, load_schema_definitions
-from .models import (
-    ActualColumn,
-    ActualTable,
-    ColumnDef,
-    IndexDef,
-    Plan,
-    PlanAction,
-    TableDef,
-)
-from .plan import load_plan, render_plan, save_plan
-from .pull import pull_schema, write_pulled_schema
+from __future__ import annotations
 
-__all__ = [
-    'ColumnDef',
-    'IndexDef',
-    'TableDef',
-    'ActualColumn',
-    'ActualTable',
-    'PlanAction',
-    'Plan',
-    'ApplyResult',
-    'load_schema_definitions',
-    'load_ignored_tables',
-    'introspect_tables',
-    'generate_plan',
-    'render_plan',
-    'save_plan',
-    'load_plan',
-    'apply_plan',
-    'init_scaffold',
-    'pull_schema',
-    'write_pulled_schema',
-]
+import importlib
+
+
+_SYMBOL_MODULE_MAP = {
+    'ApplyResult': 'apply',
+    'apply_plan': 'apply',
+    'generate_plan': 'diff',
+    'init_scaffold': 'init',
+    'introspect_tables': 'introspect',
+    'load_ignored_tables': 'loader',
+    'load_schema_definitions': 'loader',
+    'load_plan': 'plan',
+    'render_plan': 'plan',
+    'save_plan': 'plan',
+    'pull_schema': 'pull',
+    'write_pulled_schema': 'pull',
+    'ActualColumn': 'models',
+    'ActualTable': 'models',
+    'ColumnDef': 'models',
+    'IndexDef': 'models',
+    'Plan': 'models',
+    'PlanAction': 'models',
+    'TableDef': 'models',
+}
+
+__all__ = list(_SYMBOL_MODULE_MAP)
+
+
+def __getattr__(name: str):
+    module_name = _SYMBOL_MODULE_MAP.get(name)
+    if not module_name:
+        raise AttributeError(f"module 'tablemaster.schema' has no attribute {name!r}")
+    module = importlib.import_module(f'.{module_name}', __name__)
+    value = getattr(module, name)
+    globals()[name] = value
+    return value

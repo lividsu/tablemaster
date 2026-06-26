@@ -17,6 +17,8 @@ def _quote_str(value: str) -> str:
 
 
 class MySQLDialect(BaseDialect):
+    requires_full_column_definition = True
+
     def map_type(self, generic_type: str) -> str:
         normalized = generic_type.strip().upper()
         if normalized.startswith('TIMESTAMP'):
@@ -135,6 +137,17 @@ class MySQLDialect(BaseDialect):
         schema_name: str | None = None,
     ) -> str:
         return f'ALTER TABLE {self._qualified_table(table, schema_name)} MODIFY COLUMN {_quote(col_name)} {new_type}'
+
+    def gen_alter_column_definition(
+        self,
+        table: str,
+        col: ColumnDef,
+        schema_name: str | None = None,
+    ) -> str:
+        return (
+            f'ALTER TABLE {self._qualified_table(table, schema_name)} '
+            f'MODIFY COLUMN {self._column_sql(col)}'
+        )
 
     def gen_alter_column_nullable(
         self,

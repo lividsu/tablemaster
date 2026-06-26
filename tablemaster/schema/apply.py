@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-
-import typer
+from typing import Callable
 
 from ..database import opt
 from .models import Plan
@@ -38,6 +37,8 @@ def apply_plan(
     cfg,
     auto_approve: bool = False,
     continue_on_error: bool = False,
+    confirm: Callable[[str], bool] | None = None,
+    report: Callable[[str], None] | None = None,
 ) -> ApplyResult:
     result = ApplyResult(connection=plan.connection, skipped_warnings=len(plan.warnings))
     executable = [a for a in plan.actions if not a.is_warning and a.ddl]
@@ -45,10 +46,9 @@ def apply_plan(
         return result
 
     if not auto_approve:
-        confirmed = typer.confirm(
-            f'Execute {len(executable)} DDL statements for {plan.connection}?',
-            default=False,
-        )
+        confirmed = bool(confirm and confirm(
+            f'Execute {len(executable)} DDL statements for {plan.connection}?'
+        ))
         if not confirmed:
             return result
 
@@ -64,7 +64,8 @@ def apply_plan(
                     success=True,
                 )
             )
-            typer.echo(f'✓ {action.action} {action.table}')
+            if report:
+                report(f'✓ {action.action} {action.table}')
         except Exception as exc:
             result.executed.append(
                 ApplyItemResult(
@@ -76,11 +77,12 @@ def apply_plan(
                     error=str(exc),
                 )
             )
-            typer.echo(f'✗ {action.action} {action.table}: {exc}')
+            if report:
+                report(f'✗ {action.action} {action.table}: {exc}')
             if auto_approve and not continue_on_error:
                 break
             if not auto_approve:
-                should_continue = typer.confirm('DDL failed. Continue?', default=False)
+                should_continue = bool(confirm and confirm('DDL failed. Continue?'))
                 if not should_continue:
                     break
 
